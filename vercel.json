@@ -2,5 +2,10 @@
   "outputDirectory": "public",
   "framework": null,
   "buildCommand": null,
-  "installCommand": "echo \"Instalação não é necessária\""
+  "installCommand": "echo \"Instalação não é necessária\"",
+  "functions": {
+    "api/gemini.js": {
+      "maxDuration": 60
+    }
+  }
 }

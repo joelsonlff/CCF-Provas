@@ -24,11 +24,15 @@ module.exports = async function handler(req, res) {
   for (let i = 0; i < keys.length; i++) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keys[i]}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const data = await response.json();
       if (data.error && (data.error.code === 429 || data.error.code === 503)) {
         continue;

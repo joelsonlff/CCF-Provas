@@ -405,7 +405,7 @@ function salvar(){
 }
 
 // COMPRESSAO CLIENT-SIDE (Evitar max payload 4.5MB da Vercel)
-function resizeImageFile(file, maxSize, callback) {
+function resizeImageFile(file, maxSize, callback, errCallback) {
   var r = new FileReader();
   r.onload = function(e) {
     var img = new Image();
@@ -422,7 +422,13 @@ function resizeImageFile(file, maxSize, callback) {
       var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       callback(dataUrl);
     };
+    img.onerror = function() {
+      if (errCallback) errCallback('Falha ao abrir imagem. Verifique se o formato é suportado e tente novamente.');
+    };
     img.src = e.target.result;
+  };
+  r.onerror = function() {
+    if (errCallback) errCallback('Falha ao ler o arquivo selecionado.');
   };
   r.readAsDataURL(file);
 }
@@ -435,6 +441,8 @@ function handleFile(e){
     var p=document.getElementById('iprev');p.src=dataUrl;p.style.display='block';
     document.getElementById('bia').disabled=false;
     document.getElementById('uz').style.display='none';
+  }, function(err) {
+    alert(err);
   });
 }
 
@@ -456,20 +464,23 @@ function buildPrompt(isLote){
 }
 
 function chamarIA(b64, prompt, cb){
+  var ctrl = window.AbortController ? new AbortController() : null;
+  var sig = ctrl ? ctrl.signal : undefined;
+  var tid = ctrl ? setTimeout(function(){ ctrl.abort(); }, 58000) : null;
   fetch('/api/gemini',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:1024,responseMimeType:'application/json'}})
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:1024,responseMimeType:'application/json'}}),
+    signal: sig
   })
   .then(function(r){return r.json();})
   .then(function(data){
+    if(tid) clearTimeout(tid);
     if(data.error){
-      cb(null,'Erro da API: '+(data.error.message||data.error));return;
+      cb(null,'Erro da API: '+(data.error.message||data.error.code||data.error));return;
     }
     var txt=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text)||'';
     try{
-      var clean = txt
-        .replace(/```json/gi,'').replace(/```/g,'')
-        .trim();
+      var clean = txt.replace(/```json/gi,'').replace(/```/g,'').trim();
       var start = clean.indexOf('{');
       var end   = clean.lastIndexOf('}');
       if(start === -1 || end === -1) throw new Error('Sem JSON');
@@ -484,7 +495,9 @@ function chamarIA(b64, prompt, cb){
     }
   })
   .catch(function(err){
-    cb(null,'Erro de conexão com o servidor. Verifique sua internet e tente novamente.');
+    if(tid) clearTimeout(tid);
+    if(err.name === 'AbortError') return cb(null,'Tempo limite da IA excedido (58s). O servidor demorou muito para responder.');
+    cb(null,'Erro de conexão ou timeout do servidor Vercel (504). Não parou? Verifique sua internet.');
   });
 }
 
@@ -552,11 +565,11 @@ function processarLote(){
     var i=idx++;
     var st=document.getElementById('ls'+i);
     if(st)st.textContent='⟳ Processando...';if(st)st.className='lote-status proc';
+    var pctBase=Math.round((i+1)/loteFiles.length*100);
     resizeImageFile(loteFiles[i], 1600, function(dataUrl) {
       var b64=dataUrl.split(',')[1];
       chamarIA(b64,buildPrompt(true),function(parsed,err){
-        var pct=Math.round((i+1)/loteFiles.length*100);
-        document.getElementById('prog-fill').style.width=pct+'%';
+        document.getElementById('prog-fill').style.width=pctBase+'%';
         if(err||!parsed||parsed.erro){
           loteRes[i]={erro:err||parsed&&parsed.erro||'Erro',arquivo:loteFiles[i].name};
           if(st){st.textContent='✗ Erro';st.className='lote-status err';}
@@ -582,6 +595,13 @@ function processarLote(){
         document.getElementById('lote-resumo').style.display='block';
         setTimeout(proxima,300);
       });
+    }, function(errString) {
+      loteRes[i]={erro:errString,arquivo:loteFiles[i].name};
+      if(st){st.textContent='✗ Inválido';st.className='lote-status err';}
+      document.getElementById('prog-fill').style.width=pctBase+'%';
+      document.getElementById('lote-resumo').textContent='Processando '+(i+1)+' de '+loteFiles.length+'...';
+      document.getElementById('lote-resumo').style.display='block';
+      setTimeout(proxima,300);
     });
   }
   proxima();
