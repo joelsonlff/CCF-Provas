@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leitor de Gabaritos — CCF</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--red:#7B1518;--red-dark:#5C0F12;--red-light:#9B2528;--gold:#C4982A;--white:#fff;--cream:#FDF8F0;--cream2:#F5F0E8;--text:#2C0A0B;--muted:#8B5E5F;--border:#E0D5C5;--ok:#1e8a4c;--warn:#b07d10;--err:#c0392b}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--cream);color:var(--text);min-height:100vh}
+header{background:linear-gradient(135deg,var(--red-dark),var(--red) 70%,var(--red-light));position:relative}
+header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--gold)}
+.hi{max-width:900px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;gap:14px}
+.logo-box{background:rgba(255,255,255,.12);border:1px solid rgba(196,152,42,.35);border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.logo-box img{height:34px;width:auto}
+.logo-box strong{font-size:11px;font-weight:700;color:white;display:block}
+.logo-box span{font-size:9px;color:rgba(255,255,255,.6)}
+.ht{flex:1}.ht h1{font-size:17px;font-weight:700;color:white}.ht p{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px}
+.aib{margin-left:auto;background:rgba(30,138,76,.25);border:1px solid rgba(30,138,76,.5);color:#7fffc0;font-size:11px;padding:4px 12px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+main{max-width:900px;margin:0 auto;padding:22px 16px 60px}
+.tabs{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:22px;background:white;box-shadow:0 1px 4px rgba(123,21,24,.06)}
+.tb{flex:1;padding:11px 6px;background:transparent;border:none;border-right:1px solid var(--border);cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.tb:last-child{border-right:none}.tb.active{background:var(--red);color:white}.tb.done{color:var(--ok)}
+.sn{width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+.tb.active .sn{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}.tb.done .sn{background:var(--ok);border-color:var(--ok);color:white}
+.pn{display:none}.pn.active{display:block;animation:fi .25s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.card{background:white;border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:12px;box-shadow:0 1px 5px rgba(123,21,24,.05)}
+.cl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gold);margin-bottom:11px}
+.sb{background:var(--red);color:white;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.sb span{font-size:10px;color:rgba(255,255,255,.65);font-weight:400}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.fr.t3{grid-template-columns:1fr 1fr 1fr}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:11px;font-weight:600;color:var(--red);text-transform:uppercase;letter-spacing:.5px}
+.fg input,.fg select{padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--cream);font-family:inherit}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--gold)}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.qi{background:var(--cream2);border:1px solid var(--border);border-radius:10px;padding:11px}
+.qn{font-size:11px;font-weight:700;color:var(--red);font-family:monospace;margin-bottom:9px}
+.opts{display:flex;gap:5px;flex-wrap:wrap}
+.ob{width:33px;height:33px;border-radius:50%;border:2px solid var(--border);background:white;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.ob:hover{border-color:var(--gold);color:var(--red)}.ob.sel{background:var(--red);border-color:var(--red);color:white}
+.dt{display:inline-block;padding:3px 9px;border-radius:20px;background:var(--cream2);border:1px solid var(--border);font-size:11px;color:var(--muted);margin-bottom:7px}
+.ds{display:flex;align-items:center;gap:7px;margin-top:7px}
+.ds label{font-size:11px;color:var(--muted);white-space:nowrap}
+.ds input{width:65px;padding:5px 7px;font-size:14px;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);color:var(--text);font-family:monospace;font-weight:700;text-align:center}
+.ds .mp{font-size:11px;color:var(--muted)}
+.uz{border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;background:var(--cream2);transition:all .2s;margin-bottom:10px}
+.uz:hover{border-color:var(--gold)}.uz input{display:none}.uz .ico{font-size:26px;margin-bottom:7px}.uz p{font-size:13px;color:var(--muted)}.uz small{font-size:11px;color:var(--muted);opacity:.7}
+.ip{width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid var(--border);display:none;margin-bottom:10px}
+.as2{display:none;align-items:center;gap:8px;padding:10px 12px;background:#e8f4fd;border:1px solid #b3d5f0;border-radius:9px;font-size:13px;color:#1565c0;margin-bottom:10px}
+.sp{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.al{background:#e8f8ef;border:1px solid #a3d9bb;border-radius:9px;padding:9px 12px;font-size:13px;color:#1a6b40;margin-bottom:10px;display:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:9px 16px;border:1.5px solid var(--border);border-radius:9px;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);font-family:inherit;transition:all .15s;width:100%}
+.btn:hover{background:var(--cream2)}.btn.p{background:var(--red);border-color:var(--red);color:white}.btn.p:hover{background:var(--red-dark)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.br{display:flex;gap:7px;margin-top:10px}
+/* LOTE */
+.lote-queue{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:320px;overflow-y:auto}
+.lote-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--cream2);border:1px solid var(--border);border-radius:9px}
+.lote-thumb{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
+.lote-nome{flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lote-status{font-size:11px;font-family:monospace;font-weight:700;flex-shrink:0}
+.lote-status.ok{color:var(--ok)}.lote-status.err{color:var(--err)}.lote-status.proc{color:var(--warn)}
+.prog-bar{height:5px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden}
+.prog-fill{height:100%;background:var(--red);border-radius:3px;transition:width .4s ease;width:0%}
+/* RESULTADO LOTE */
+.res-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+.res-table th{background:var(--red);color:white;padding:7px 10px;text-align:left;font-size:11px;font-weight:600}
+.res-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.res-table tr:nth-child(even) td{background:var(--cream2)}
+.res-table tr:hover td{background:#f0e8d8}
+/* RESULTADO INDIVIDUAL */
+.rs{text-align:center;padding:18px;background:var(--cream2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px}
+.rb{font-size:40px;font-weight:700;font-family:monospace;line-height:1}
+.rl{font-size:12px;color:var(--muted);margin-top:4px}
+.rbar{height:6px;border-radius:3px;background:var(--border);margin-top:12px;overflow:hidden}
+.rf{height:100%;border-radius:3px;transition:width .7s ease}
+.qrl{display:flex;flex-direction:column;gap:5px}
+.qrr{display:flex;align-items:center;gap:9px;padding:8px 12px;background:var(--cream2);border:1px solid var(--border);border-radius:9px}
+.rn{font-size:12px;font-family:monospace;font-weight:700;color:var(--muted);min-width:28px}
+.rt{font-size:11px;color:var(--muted);min-width:68px}
+.ri{flex:1;font-size:12px;color:var(--text)}
+.rp{font-size:13px;font-family:monospace;font-weight:700}
+.c-ok{color:var(--ok)}.c-warn{color:var(--warn)}.c-err{color:var(--err)}
+.nalt-btn{padding:5px 12px;border:1.5px solid var(--border);border-radius:20px;background:white;cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);font-family:inherit;transition:all .15s}
+.nalt-btn:hover{border-color:var(--gold);color:var(--red)}
+.nalt-btn.nalt-sel{background:var(--red);border-color:var(--red);color:white}
+.np-btn{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);background:var(--cream);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.np-btn:hover{border-color:var(--gold);color:var(--red)}
+.np-btn.np-sel{border-color:var(--red);background:var(--red);color:white}
+hr.sep{border:none;border-top:1px solid var(--border);margin:12px 0}
+footer{text-align:center;padding:14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);margin-top:36px}
+@media(max-width:600px){
+  .hi{padding:11px 12px;gap:8px}.logo-box img{height:28px}.logo-box span{display:none}.ht h1{font-size:13px}.ht p{font-size:10px}.aib{display:none}
+  main{padding:12px 10px 40px}.tb{font-size:10px;padding:10px 3px;gap:3px}.sn{width:18px;height:18px;font-size:9px}
+  .fr,.fr.t3{grid-template-columns:1fr;gap:8px}.g3{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}
+  .ob{width:34px;height:34px;font-size:12px}.br{flex-direction:column}.btn{padding:11px;font-size:13px}
+  .res-table{font-size:11px}.res-table th,.res-table td{padding:5px 7px}
+}
+@media(max-width:380px){.ob{width:29px;height:29px;font-size:11px}.opts{gap:4px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hi">
+    <div class="logo-box">
+      <img src="data:image/png;base64,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" alt="CCF">
+      <div><strong>COLÉGIO CORAÇÃO FELIZ</strong><span>Tubarão — SC</span></div>
+    </div>
+    <div class="ht"><h1>Leitor de Gabaritos</h1><p>Correção automática com inteligência artificial</p></div>
+    <div class="aib">IA integrada</div>
+  </div>
+</header>
+<main>
+  <div class="tabs">
+    <button class="tb active" onclick="goTab(0)"><div class="sn" id="d0">1</div> Gabarito</button>
+    <button class="tb" onclick="goTab(1)"><div class="sn" id="d1">2</div> Upload</button>
+    <button class="tb" onclick="goTab(2)"><div class="sn" id="d2">3</div> Resultado</button>
+  </div>
+
+  <!-- PAINEL 0: GABARITO -->
+  <div class="pn active" id="p0">
+    <div class="card">
+      <div class="cl">Dados da avaliação</div>
+      <div class="fr t3">
+        <div class="fg"><label>Professor(a)</label><input type="text" id="prof" placeholder="Nome"></div>
+        <div class="fg"><label>Disciplina</label><input type="text" id="disc" placeholder="Ex: Biologia"></div>
+        <div class="fg"><label>Turma</label><input type="text" id="turma" placeholder="Ex: 3 Ano B"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label>Trimestre</label><select id="trim"><option>1</option><option>2</option><option>3</option></select></div>
+        <div class="fg"><label>Avaliação</label><input type="text" id="aval" placeholder="Ex: Avaliacao Mensal 1"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sb">QUESTÕES DISCURSIVAS <span>Q1 e Q2 — 1,0 ponto cada</span></div>
+      <div class="g2">
+        <div class="qi"><div class="qn">Q01</div><div class="dt">Discursiva</div><div class="ds"><label>Valor máx:</label><input type="number" id="d1m" value="1" min="0" max="10" step="0.5"><span class="mp">pts</span></div></div>
+        <div class="qi"><div class="qn">Q02</div><div class="dt">Discursiva</div><div class="ds"><label>Valor máx:</label><input type="number" id="d2m" value="1" min="0" max="10" step="0.5"><span class="mp">pts</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sb">QUESTÕES OBJETIVAS <span>Q3 a Q8 — marque o gabarito</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px">Alternativas por questão:</span>
+        <div style="display:flex;gap:6px" id="nalts-btns">
+          <button class="nalt-btn" onclick="setNAlts(4)">4</button>
+          <button class="nalt-btn nalt-sel" onclick="setNAlts(5)">5</button>
+        </div>
+      </div>
+      <div class="g3" id="og"></div>
+    </div>
+    <div class="card">
+      <div class="sb">QUESTÕES SOMATÓRIAS <span>Q9 e Q10 — marque a soma correta</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px">Nº de itens por somatória (NP):</span>
+        <div style="display:flex;gap:5px" id="np-btns">
+          <button class="np-btn" onclick="setNP(5)">5</button>
+          <button class="np-btn" onclick="setNP(6)">6</button>
+          <button class="np-btn np-sel" onclick="setNP(7)">7</button>
+        </div>
+        <span style="font-size:11px;color:var(--muted)" id="np-vals-label">Itens: 1, 2, 4, 8, 16, 32, 64, 128</span>
+      </div>
+      <div class="g2" id="sg"></div>
+    </div>
+    <button class="btn p" onclick="salvar()">Salvar gabarito e continuar →</button>
+  </div>
+
+  <!-- PAINEL 1: UPLOAD -->
+  <div class="pn" id="p1">
+    <div class="card">
+      <div class="sb">MODO DE ENVIO <span>Escolha uma ou várias fotos</span></div>
+      <div class="br" style="margin-top:0">
+        <button class="btn" id="btn-individual" onclick="setModo('individual')" style="border-color:var(--red);color:var(--red)">📄 Prova individual</button>
+        <button class="btn" id="btn-lote" onclick="setModo('lote')">📚 Lote de provas</button>
+      </div>
+    </div>
+
+    <!-- INDIVIDUAL -->
+    <div id="modo-individual">
+      <div class="card">
+        <div class="cl">Dados do aluno</div>
+        <div class="fr">
+          <div class="fg"><label>Nome do aluno</label><input type="text" id="anome" placeholder="Nome completo"></div>
+          <div class="fg"><label>Nº / Chamada</label><input type="text" id="anum" placeholder="Ex: 15"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cl">Foto da folha de respostas</div>
+        <div class="al" id="al"></div>
+        <img class="ip" id="iprev">
+        <div class="uz" id="uz" onclick="document.getElementById('fi').click()">
+          <input type="file" id="fi" accept="image/*" onchange="handleFile(event)">
+          <div class="ico">📷</div>
+          <p>Clique para selecionar a foto da prova</p>
+          <small>JPG, PNG ou WEBP — foto do celular aceita</small>
+        </div>
+        <div class="as2" id="ast"><div class="sp"></div><span id="atxt">Analisando...</span></div>
+        <div class="br">
+          <button class="btn p" id="bia" onclick="analisarIA()" disabled>Analisar com IA</button>
+          <button class="btn" onclick="manual()">Preencher manualmente</button>
+        </div>
+      </div>
+      <div class="card" id="ca" style="display:none">
+        <div class="sb">OBJETIVAS DO ALUNO <span>Confirme antes de corrigir</span></div>
+        <div class="g3" id="oa" style="margin-bottom:12px"></div>
+        <hr class="sep">
+        <div class="sb">SOMATÓRIAS DO ALUNO</div>
+        <div class="g2" id="sa"></div>
+        <hr class="sep">
+        <div class="sb">DISCURSIVAS — NOTA DO PROFESSOR</div>
+        <div class="g2" id="da"></div>
+        <div class="br" style="margin-top:14px">
+          <button class="btn p" onclick="corrigir()">Corrigir e ver resultado →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOTE -->
+    <div id="modo-lote" style="display:none">
+      <div class="card">
+        <div class="cl">Selecionar provas da turma</div>
+        <div class="uz" onclick="document.getElementById('fl').click()">
+          <input type="file" id="fl" accept="image/*" multiple onchange="handleLote(event)">
+          <div class="ico">📚</div>
+          <p>Clique para selecionar várias fotos de uma vez</p>
+          <small>Selecione todas as provas da turma — JPG, PNG ou WEBP</small>
+        </div>
+        <div id="lote-queue" class="lote-queue" style="display:none"></div>
+        <div class="prog-bar" id="prog-bar" style="display:none"><div class="prog-fill" id="prog-fill"></div></div>
+        <div id="lote-resumo" style="display:none;font-size:12px;color:var(--muted);margin-top:8px;text-align:center"></div>
+        <div class="br" style="margin-top:10px">
+          <button class="btn p" id="btn-proc" onclick="processarLote()" disabled>Processar lote com IA</button>
+          <button class="btn" id="btn-csv-lote" onclick="exportLote()" disabled style="display:none">Exportar CSV da turma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAINEL 2: RESULTADO -->
+  <div class="pn" id="p2">
+    <div id="res"><p style="color:var(--muted);font-size:13px">Nenhuma correção realizada ainda.</p></div>
+  </div>
+</main>
+<footer>Colégio Coração Feliz · Tubarão – SC · Sistema de Leitura de Gabaritos com IA</footer>
+
+<script>
+// Chaves de API protegidas no servidor (Vercel Serverless Function)
+
+var OPTS_ALL=['A','B','C','D','E'],OQS=[3,4,5,6,7,8],SQS=[9,10];
+var nAlts=5; // padrão: 5 alternativas
+var OPTS=OPTS_ALL.slice(0,nAlts);
+// Itens somatória — NP dinâmico
+var NP=7;
+var ALL_SOMA_VALS=[1,2,4,8,16,32,64];
+var SOMA_VALS=ALL_SOMA_VALS.slice(0,NP);
+
+function decomporSoma(soma){
+  if(soma===null||soma===undefined) return [];
+  var itens=[]; SOMA_VALS.forEach(function(v){ if(soma&v) itens.push(v); });
+  return itens;
+}
+function calcSomaPts(gabVal,aluVal){
+  var gabItens=decomporSoma(gabVal), aluItens=decomporSoma(aluVal);
+  var np=gabItens.length; // itens corretos no gabarito
+  if(np===0) return 0;
+  var npc=aluItens.filter(function(v){return gabItens.indexOf(v)>=0;}).length;
+  var npi=aluItens.filter(function(v){return gabItens.indexOf(v)<0;}).length;
+  return Math.max(0,(npc-npi)/np);
+}
+
+function setNAlts(n){
+  nAlts=n;
+  OPTS=OPTS_ALL.slice(0,n);
+  // Atualizar botões
+  document.querySelectorAll('.nalt-btn').forEach(function(b){
+    b.classList.toggle('nalt-sel', parseInt(b.textContent)===n);
+  });
+  // Resetar respostas do gabarito que usam letra inválida
+  OQS.forEach(function(q){
+    if(gab.obj[q] && OPTS.indexOf(gab.obj[q])<0) gab.obj[q]=null;
+  });
+  // Reconstruir grids
+  bObj('og',gab);
+  if(document.getElementById('oa').innerHTML) bObj('oa',alu);
+}
+
+function setNP(n){
+  NP=n;
+  SOMA_VALS=ALL_SOMA_VALS.slice(0,n);
+  // Atualizar botões
+  document.querySelectorAll('.np-btn').forEach(function(b){
+    b.classList.toggle('np-sel', parseInt(b.textContent)===n);
+  });
+  // Atualizar label com os itens
+  var label=document.getElementById('np-vals-label');
+  if(label) label.textContent='Itens: '+SOMA_VALS.join(', ')+' | Soma máx: '+SOMA_VALS.reduce(function(a,b){return a+b;},0);
+  // Resetar gabarito somatório e reconstruir
+  SQS.forEach(function(q){ gab.soma[q]=null; alu.soma[q]=null; });
+  bSoma('sg',gab);
+  if(document.getElementById('sa') && document.getElementById('sa').innerHTML) bSoma('sa',alu);
+}
+var gab={obj:{3:null,4:null,5:null,6:null,7:null,8:null},soma:{9:null,10:null},disc:{1:{max:1},2:{max:1}}};
+var alu={obj:{3:null,4:null,5:null,6:null,7:null,8:null},soma:{9:null,10:null},disc:{1:{pts:0},2:{pts:0}}};
+var imgB64=null, modo='individual', loteFiles=[], loteRes=[];
+var _cn='', _cno='0', _cp='0';
+
+function goTab(i){
+  document.querySelectorAll('.pn').forEach(function(p,j){p.classList.toggle('active',j===i);});
+  document.querySelectorAll('.tb').forEach(function(b,j){b.classList.toggle('active',j===i);});
+}
+
+function setModo(m){
+  modo=m;
+  document.getElementById('modo-individual').style.display=m==='individual'?'block':'none';
+  document.getElementById('modo-lote').style.display=m==='lote'?'block':'none';
+  var bi=document.getElementById('btn-individual'), bl=document.getElementById('btn-lote');
+  bi.style.cssText=m==='individual'?'border-color:var(--red);color:var(--red)':'';
+  bl.style.cssText=m==='lote'?'border-color:var(--red);color:var(--red)':'';
+}
+
+// BUILD OBJETIVAS
+function bObj(cid,store){
+  var g=document.getElementById(cid);if(!g)return;g.innerHTML='';
+  OQS.forEach(function(q){
+    var div=document.createElement('div');div.className='qi';
+    var num=document.createElement('div');num.className='qn';num.textContent='Q'+String(q).padStart(2,'0');
+    var opts=document.createElement('div');opts.className='opts';
+    OPTS.forEach(function(l){
+      var b=document.createElement('button');b.className='ob'+(store.obj[q]===l?' sel':'');b.textContent=l;
+      b.onclick=(function(qq,ll){return function(){store.obj[qq]=store.obj[qq]===ll?null:ll;bObj(cid,store);};})(q,l);
+      opts.appendChild(b);
+    });
+    div.appendChild(num);div.appendChild(opts);g.appendChild(div);
+  });
+}
+
+// BUILD SOMATÓRIAS
+function bSoma(cid,store){
+  var g=document.getElementById(cid);if(!g)return;g.innerHTML='';
+  SQS.forEach(function(q){
+    var val=store.soma[q];
+    var dez=(val!==null&&val!==undefined)?Math.floor(val/10):null;
+    var uni=(val!==null&&val!==undefined)?val%10:null;
+    var div=document.createElement('div');div.className='qi';div.style.padding='11px';
+    var num=document.createElement('div');num.className='qn';num.style.marginBottom='9px';
+    num.textContent='Q'+String(q).padStart(2,'0');div.appendChild(num);
+    ['Dezena','Unidade'].forEach(function(lbl,ri){
+      var sel=ri===0?dez:uni;
+      var row=document.createElement('div');row.style.marginBottom=ri===0?'7px':'0';
+      var L=document.createElement('div');
+      L.style.cssText='font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px';
+      L.textContent=lbl;
+      var wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:4px;flex-wrap:wrap';
+      for(var d=0;d<=9;d++){
+        (function(dd){
+          var b=document.createElement('button');b.className='ob'+(sel===dd?' sel':'');b.textContent=dd;
+          b.onclick=(function(qq,rri,ddd){return function(){
+            var cur=store.soma[qq]!==null&&store.soma[qq]!==undefined?store.soma[qq]:0;
+            var cDez=Math.floor(cur/10),cUni=cur%10;
+            if(rri===0)store.soma[qq]=ddd*10+cUni;
+            else store.soma[qq]=cDez*10+ddd;
+            bSoma(cid,store);
+          };})(q,ri,dd);
+          wrap.appendChild(b);
+        })(d);
+      }
+      row.appendChild(L);row.appendChild(wrap);div.appendChild(row);
+    });
+    g.appendChild(div);
+  });
+}
+
+// BUILD DISC ALUNO
+function bDisc(){
+  var g=document.getElementById('da');if(!g)return;g.innerHTML='';
+  [1,2].forEach(function(q){
+    var max=gab.disc[q].max;
+    var div=document.createElement('div');div.className='qi';
+    div.innerHTML='<div class="qn">Q'+String(q).padStart(2,'0')+'</div><div class="dt">Discursiva</div>'+
+      '<div class="ds"><label>Nota:</label><input type="number" id="ad'+q+'" value="'+alu.disc[q].pts+'" min="0" max="'+max+'" step="0.5"><span class="mp">/ '+max+' pts</span></div>';
+    g.appendChild(div);
+  });
+}
+
+function init(){bObj('og',gab);bSoma('sg',gab);}
+
+function salvar(){
+  gab.disc[1].max=parseFloat(document.getElementById('d1m').value)||1;
+  gab.disc[2].max=parseFloat(document.getElementById('d2m').value)||1;
+  // Validar se gabarito está preenchido
+  var objVazias=OQS.filter(function(q){return !gab.obj[q];});
+  var somaVazias=SQS.filter(function(q){return gab.soma[q]===null||gab.soma[q]===undefined;});
+  if(objVazias.length>0||somaVazias.length>0){
+    var msg='Atenção — gabarito incompleto:\n';
+    if(objVazias.length>0) msg+='• Objetivas sem resposta: '+objVazias.map(function(q){return 'Q'+q;}).join(', ')+'\n';
+    if(somaVazias.length>0) msg+='• Somatórias sem resposta: '+somaVazias.map(function(q){return 'Q'+q;}).join(', ')+'\n';
+    msg+='\nDeseja continuar mesmo assim?';
+    if(!confirm(msg)) return;
+  }
+  document.getElementById('d0').textContent='✓';
+  document.querySelectorAll('.tb')[0].classList.add('done');
+  goTab(1);
+}
+
+// UPLOAD INDIVIDUAL
+function handleFile(e){
+  var file=e.target.files[0];if(!file)return;
+  var r=new FileReader();
+  r.onload=function(ev){
+    var src=ev.target.result;imgB64=src.split(',')[1];
+    var p=document.getElementById('iprev');p.src=src;p.style.display='block';
+    document.getElementById('bia').disabled=false;
+    document.getElementById('uz').style.display='none';
+  };
+  r.readAsDataURL(file);
+}
+
+// PROMPT IA
+function buildPrompt(isLote){
+  return 'Voce eh um sistema especializado em leitura optica de gabaritos escolares. Analise a imagem com MAXIMA ATENCAO.'
+    +' ESTRUTURA DA FOLHA (de cima para baixo):'
+    +' [CABECALHO] Logo CCF + campo ALUNO escrito pelo aluno em caixa alta + QR Codes de referencia.'
+    +' [Q01 e Q02] Blocos com linhas para escrita — SAO DISCURSIVAS, ignore.'
+    +' [QUESTOES OBJETIVAS] 6 questoes (Q03 a Q08) em grade 2 colunas. Cada questao tem '+nAlts+' BOLHAS CIRCULARES grandes com letras '+OPTS.join(' ')+' da esquerda para direita. O aluno PINTA/PREENCHE completamente uma bolha com caneta azul ou preta. A bolha pintada fica ESCURA E PREENCHIDA, as demais ficam VAZIAS com apenas o contorno e a letra.'
+    +' [QUESTOES SOMATORIAS] 2 questoes (Q09 e Q10). Cada questao tem DUAS FILEIRAS de 10 bolhas numeradas 0 1 2 3 4 5 6 7 8 9 da esquerda para direita. Fileira superior tem rotulo "Dez:" e fileira inferior tem rotulo "Uni:". O aluno pinta UMA bolha em cada fileira. Leia o NUMERO dentro da bolha pintada em cada fileira. Soma = Dez*10 + Uni.'
+    +' COMO IDENTIFICAR BOLHA PINTADA: ela aparece PREENCHIDA/SOLIDA/ESCURA em contraste com as bolhas vizinhas que sao VAZIAS (so tem contorno e letra/numero). Em fotos pode aparecer azul escuro ou roxo escuro (cor da tinta da caneta).'
+    +' PROCESSO: 1) Leia nome do aluno. 2) Para cada questao objetiva, olhe as '+nAlts+' bolhas e identifique qual esta preenchida. 3) Para cada somatoria, identifique a bolha preenchida na fileira Dez e na fileira Uni.'
+    +' REGRA ABSOLUTA: sua resposta deve conter APENAS o JSON abaixo, sem nenhum texto antes ou depois, sem blocos de código, sem explicações:'
+    +' {"nome":"NOME","obj":{"3":"A","4":"B","5":"C","6":"D","7":"E","8":"A"},"soma":{"9":20,"10":10},'
+    +(isLote?'"qr":{"prof":"","disc":"","turma":"","trim":"","aval":""},':'')
+    +'"obs":"Q03:A(pintada) Q04:E(pintada) Q05:C(pintada) etc — descreva cada questao"}'
+    +' Se objetiva estiver em branco use null. soma deve ser inteiro 0-99. Se imagem ilegivel: {"erro":"motivo"}.';
+}
+
+function chamarIA(b64, prompt, cb){
+  fetch('/api/gemini',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:1024,responseMimeType:'application/json'}})
+  })
+  .then(function(r){return r.json();})
+  .then(function(data){
+    if(data.error){
+      cb(null,'Erro da API: '+(data.error.message||data.error));return;
+    }
+    var txt=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]&&data.candidates[0].content.parts[0].text)||'';
+    try{
+      var clean = txt
+        .replace(/```json/gi,'').replace(/```/g,'')
+        .trim();
+      var start = clean.indexOf('{');
+      var end   = clean.lastIndexOf('}');
+      if(start === -1 || end === -1) throw new Error('Sem JSON');
+      clean = clean.substring(start, end+1);
+      var p = JSON.parse(clean);
+      cb(p,null);
+    }catch(e){
+      var m = txt.match(/\{[\s\S]*\}/);
+      if(m){try{cb(JSON.parse(m[0]),null);return;}catch(e2){}}
+      console.error('Parse error:', e.message, '| Resposta:', txt.substring(0,300));
+      cb(null,'Resposta inesperada da IA. Tente novamente ou verifique a foto.');
+    }
+  })
+  .catch(function(err){
+    cb(null,'Erro de conexão com o servidor. Verifique sua internet e tente novamente.');
+  });
+}
+
+// ANALISAR INDIVIDUAL
+function analisarIA(){
+  if(!imgB64)return;
+  var ast=document.getElementById('ast');ast.style.display='flex';
+  document.getElementById('bia').disabled=true;
+  document.getElementById('atxt').textContent='Analisando com Gemini...';
+  chamarIA(imgB64,buildPrompt(false),function(parsed,err){
+    ast.style.display='none';
+    if(err||!parsed||parsed.erro){
+      document.getElementById('bia').disabled=false;
+      alert(err||parsed.erro||'Erro desconhecido');return;
+    }
+    OQS.forEach(function(q){alu.obj[q]=(parsed.obj&&parsed.obj[String(q)])||null;});
+    SQS.forEach(function(q){var v=parsed.soma&&parsed.soma[String(q)];alu.soma[q]=(v!==undefined&&v!==null)?parseInt(v):null;});
+    if(parsed.nome&&parsed.nome.trim()){var cn=document.getElementById('anome');if(cn&&!cn.value.trim())cn.value=parsed.nome.trim();}
+    var al=document.getElementById('al');al.innerHTML='<strong>Gemini leu o gabarito.</strong> '+(parsed.obs||'Confirme as marcacoes.');al.style.display='block';
+    mostrarAlu();
+  });
+}
+
+function manual(){
+  alu={obj:{3:null,4:null,5:null,6:null,7:null,8:null},soma:{9:null,10:null},disc:{1:{pts:0},2:{pts:0}}};
+  document.getElementById('al').style.display='none';
+  mostrarAlu();
+}
+
+function mostrarAlu(){
+  document.getElementById('ca').style.display='block';
+  bObj('oa',alu);bSoma('sa',alu);bDisc();
+}
+
+// LOTE
+function handleLote(e){
+  loteFiles=Array.from(e.target.files);
+  loteRes=[];
+  var q=document.getElementById('lote-queue');q.style.display='block';q.innerHTML='';
+  loteFiles.forEach(function(f,i){
+    var item=document.createElement('div');item.className='lote-item';item.id='li'+i;
+    var r=new FileReader();
+    r.onload=function(ev){
+      var img=document.createElement('img');img.className='lote-thumb';img.src=ev.target.result;item.insertBefore(img,item.firstChild);
+    };
+    r.readAsDataURL(f);
+    var nome=document.createElement('div');nome.className='lote-nome';nome.textContent=f.name;
+    var st=document.createElement('div');st.className='lote-status';st.id='ls'+i;st.textContent='Aguardando';
+    item.appendChild(nome);item.appendChild(st);q.appendChild(item);
+  });
+  document.getElementById('btn-proc').disabled=false;
+  document.getElementById('prog-bar').style.display='block';
+  document.getElementById('prog-fill').style.width='0%';
+}
+
+function processarLote(){
+  if(!loteFiles.length)return;
+  document.getElementById('btn-proc').disabled=true;
+  loteRes=new Array(loteFiles.length).fill(null);
+  var idx=0;
+  function proxima(){
+    if(idx>=loteFiles.length){
+      finalizarLote();return;
+    }
+    var i=idx++;
+    var st=document.getElementById('ls'+i);
+    if(st)st.textContent='⟳ Processando...';if(st)st.className='lote-status proc';
+    var r=new FileReader();
+    r.onload=function(ev){
+      var b64=ev.target.result.split(',')[1];
+      chamarIA(b64,buildPrompt(true),function(parsed,err){
+        var pct=Math.round((i+1)/loteFiles.length*100);
+        document.getElementById('prog-fill').style.width=pct+'%';
+        if(err||!parsed||parsed.erro){
+          loteRes[i]={erro:err||parsed&&parsed.erro||'Erro',arquivo:loteFiles[i].name};
+          if(st){st.textContent='✗ Erro';st.className='lote-status err';}
+        } else {
+          // Calcular nota
+          var total=0,max=0;
+          [1,2].forEach(function(q){total+=parseFloat(gab.disc[q].max)||1;max+=parseFloat(gab.disc[q].max)||1;}); // disc — professor corrige depois
+          OQS.forEach(function(q){var g=gab.obj[q],a=parsed.obj&&parsed.obj[String(q)];if(g&&a&&g===a)total+=1;max+=1;});
+          // Descontar as discursivas da contagem automática (professor corrige depois)
+          var totalAuto=0,maxAuto=0;
+          OQS.forEach(function(q){var g=gab.obj[q],a=parsed.obj&&parsed.obj[String(q)];if(g&&a&&g===a)totalAuto+=1;maxAuto+=1;});
+          SQS.forEach(function(q){var g=gab.soma[q],a=parsed.soma&&parsed.soma[String(q)]!==undefined?parseInt(parsed.soma[String(q)]):null;totalAuto+=calcSomaPts(g,a);maxAuto+=1;});
+          var nota=(maxAuto>0?(totalAuto/maxAuto*8):0).toFixed(2); // 8pts objetivas+soma, 2pts discursivas
+          loteRes[i]={
+            nome:parsed.nome||'(ilegível)',
+            obj:parsed.obj||{},soma:parsed.soma||{},
+            totalAuto:totalAuto,maxAuto:maxAuto,nota:nota,
+            arquivo:loteFiles[i].name,obs:parsed.obs||''
+          };
+          if(st){st.textContent='✓ OK';st.className='lote-status ok';}
+        }
+        document.getElementById('lote-resumo').textContent='Processando '+(i+1)+' de '+loteFiles.length+'...';
+        document.getElementById('lote-resumo').style.display='block';
+        setTimeout(proxima,300);
+      });
+    };
+    r.readAsDataURL(loteFiles[i]);
+  }
+  proxima();
+}
+
+function finalizarLote(){
+  var ok=loteRes.filter(function(r){return r&&!r.erro;}).length;
+  var err=loteRes.filter(function(r){return r&&r.erro;}).length;
+  document.getElementById('lote-resumo').textContent='Concluído: '+ok+' processadas, '+err+' com erro.';
+  document.getElementById('btn-csv-lote').style.display='block';
+  document.getElementById('btn-csv-lote').disabled=false;
+  mostrarResultadoLote();
+}
+
+function mostrarResultadoLote(){
+  document.getElementById('d2').textContent='✓';
+  document.querySelectorAll('.tb')[2].classList.add('done');
+  var html='<div class="cl">Resultado da turma</div>';
+  html+='<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Nota parcial = objetivas + somatórias (8,0 pts). Discursivas corrigidas pelo professor (+2,0 pts).</p>';
+  html+='<div style="overflow-x:auto"><table class="res-table"><thead><tr>';
+  html+='<th>Nº</th><th>Nome</th>';
+  OQS.forEach(function(q){html+='<th>Q'+q+'</th>';});
+  SQS.forEach(function(q){html+='<th>Q'+q+'</th>';});
+  html+='<th>Pts auto</th><th>Obs</th></tr></thead><tbody>';
+  loteRes.forEach(function(r,i){
+    if(!r||r.erro){
+      html+='<tr><td>'+(i+1)+'</td><td colspan="10" style="color:var(--err)">Erro: '+(r?r.erro:'falha')+'</td></tr>';return;
+    }
+    html+='<tr><td>'+(i+1)+'</td><td>'+r.nome+'</td>';
+    OQS.forEach(function(q){
+      var a=r.obj&&r.obj[String(q)],g=gab.obj[q];
+      var ok2=g&&a&&g===a;
+      html+='<td style="color:'+(ok2?'#1e8a4c':'#c0392b')+'">'+(a||'-')+'</td>';
+    });
+    SQS.forEach(function(q){
+      var a=r.soma&&r.soma[String(q)]!==undefined?r.soma[String(q)]:null;
+      var g=gab.soma[q];
+      var ok2=g!==null&&a!==null&&g===a;
+      html+='<td style="color:'+(ok2?'#1e8a4c':'#c0392b')+'">'+(a!==null?a:'-')+'</td>';
+    });
+    html+='<td><strong>'+r.totalAuto+'/'+r.maxAuto+'</strong></td><td style="font-size:10px;color:var(--muted)">'+r.obs+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  html+='<div class="br" style="margin-top:12px">';
+  html+='<button class="btn p" onclick="exportLote()">Exportar CSV da turma</button>';
+  html+='<button class="btn" onclick="novoLote()">Novo lote</button>';
+  html+='</div>';
+  document.getElementById('res').innerHTML=html;
+  goTab(2);
+}
+
+function exportLote(){
+  var nl='\n';
+  var prof=document.getElementById('prof').value||'';
+  var dn=document.getElementById('disc').value||'';
+  var turma=document.getElementById('turma').value||'';
+  var aval=document.getElementById('aval').value||'';
+  var csv='Avaliacao;Professor;Disciplina;Turma'+nl;
+  csv+=aval+';'+prof+';'+dn+';'+turma+nl+nl;
+  csv='No;Nome;'+OQS.map(function(q){return 'Q'+q+'(Gab:'+( gab.obj[q]||'?')+')';}).join(';')+';'+SQS.map(function(q){return 'Q'+q+'(Gab:'+(gab.soma[q]!==null?gab.soma[q]:'?')+')';}).join(';')+';Pts_Auto;Max_Auto;Disc_Q1;Disc_Q2'+nl;
+  loteRes.forEach(function(r,i){
+    if(!r||r.erro){csv+=(i+1)+';ERRO;;;;;;;;;;'+nl;return;}
+    var linha=[(i+1),r.nome];
+    OQS.forEach(function(q){linha.push(r.obj&&r.obj[String(q)]||'-');});
+    SQS.forEach(function(q){var v=r.soma&&r.soma[String(q)];linha.push(v!==undefined&&v!==null?v:'-');});
+    linha.push(r.totalAuto,r.maxAuto,'','');
+    csv+=linha.join(';')+nl;
+  });
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='turma_'+turma.replace(/[^a-z0-9]/gi,'_')+'.csv';a.click();URL.revokeObjectURL(url);
+}
+
+function novoLote(){
+  loteFiles=[];loteRes=[];
+  document.getElementById('fl').value='';
+  document.getElementById('lote-queue').innerHTML='';
+  document.getElementById('lote-queue').style.display='none';
+  document.getElementById('prog-bar').style.display='none';
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('lote-resumo').style.display='none';
+  document.getElementById('btn-proc').disabled=true;
+  document.getElementById('btn-csv-lote').style.display='none';
+  goTab(1);
+}
+
+// CORRIGIR INDIVIDUAL
+function corrigir(){
+  var nome=document.getElementById('anome').value||'Aluno';
+  var num=document.getElementById('anum').value||'—';
+  var prof=document.getElementById('prof').value||'';
+  var dn=document.getElementById('disc').value||'';
+  var turma=document.getElementById('turma').value||'';
+  var aval=document.getElementById('aval').value||'';
+  var total=0,maxTotal=0,rows=[];
+  [1,2].forEach(function(q){
+    var el=document.getElementById('ad'+q);
+    var pts=el?(parseFloat(el.value)||0):0;
+    alu.disc[q].pts=pts;
+    var max=gab.disc[q].max;
+    total+=pts;maxTotal+=max;
+    var p2=max>0?pts/max:0;
+    rows.push({q:q,tipo:'Discursiva',info:pts.toFixed(1)+' / '+max.toFixed(1)+' pts',pts:pts,cls:p2>=.75?'c-ok':p2>0?'c-warn':'c-err'});
+  });
+  OQS.forEach(function(q){
+    var g2=gab.obj[q],a2=alu.obj[q];
+    var ok=g2&&a2&&g2===a2;
+    rows.push({q:q,tipo:'Objetiva',info:(a2||'Branco')+' | Gab: '+(g2||'?'),pts:ok?1:0,cls:ok?'c-ok':'c-err'});
+    total+=(ok?1:0);maxTotal+=1;
+  });
+  SQS.forEach(function(q){
+    var g2=gab.soma[q], a2=alu.soma[q];
+    var gabItens = decomporSoma(g2);
+    var aluItens = decomporSoma(a2);
+    var pts = calcSomaPts(g2, a2);
+    pts = Math.round(pts*100)/100;
+    var npc  = aluItens.filter(function(v){ return gabItens.indexOf(v)>=0; }).length;
+    var npi  = aluItens.filter(function(v){ return gabItens.indexOf(v)<0;  }).length;
+    var cls  = pts>=1?'c-ok':pts>0?'c-warn':'c-err';
+    var gabStr = g2!==null ? g2+' ('+gabItens.join('+')+')' : '?';
+    var aluStr = a2!==null ? a2+' ('+aluItens.join('+')+')' : 'Branco';
+    rows.push({q:q,tipo:'Somatoria',info:'Gab: '+gabStr+' | Aluno: '+aluStr+' | acertos:'+npc+' erros:'+npi,pts:pts,cls:cls});
+    total+=pts; maxTotal+=1;
+  });
+  var pct=maxTotal>0?total/maxTotal*100:0;
+  var nota=(total/maxTotal*10).toFixed(2);
+  var cor=pct>=60?'#1e8a4c':pct>=40?'#b07d10':'#c0392b';
+  _cn=nome;_cno=nota;_cp=pct.toFixed(1);
+  var html='<div class="cl">Resultado</div>';
+  html+='<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+aval+' · '+dn+' · '+turma+' · Prof. '+prof+'</div>';
+  html+='<div class="rs"><div class="rb" style="color:'+cor+'">'+nota+'</div><div class="rl">'+nome+' · Nº '+num+' · '+total.toFixed(2)+' de '+maxTotal.toFixed(1)+' pts · '+pct.toFixed(1)+'%</div><div class="rbar"><div class="rf" style="width:'+pct+'%;background:'+cor+'"></div></div></div>';
+  html+='<div class="cl">Detalhamento</div><div class="qrl">';
+  rows.forEach(function(r){
+    html+='<div class="qrr"><span class="rn">Q'+String(r.q).padStart(2,'0')+'</span><span class="rt">'+r.tipo+'</span><span class="ri">'+r.info+'</span><span class="rp '+r.cls+'">'+(r.pts>0?'+'+r.pts.toFixed(2):'0.00')+'</span></div>';
+  });
+  html+='</div><div class="br" style="margin-top:12px"><button class="btn" onclick="exportCSV()">Exportar CSV</button><button class="btn p" onclick="novaCorrecao()">Nova correcao</button></div>';
+  document.getElementById('res').innerHTML=html;
+  document.getElementById('d2').textContent='✓';
+  document.querySelectorAll('.tb')[2].classList.add('done');
+  goTab(2);
+}
+
+function exportCSV(){
+  var nl='\n';
+  var prof=document.getElementById('prof').value||'';
+  var dn=document.getElementById('disc').value||'';
+  var t=document.getElementById('turma').value||'';
+  var av=document.getElementById('aval').value||'';
+  var n=document.getElementById('anum').value||'';
+  var csv='Avaliacao;Professor;Disciplina;Turma;No;Aluno;Nota;Aproveitamento'+nl;
+  csv+=av+';'+prof+';'+dn+';'+t+';'+n+';'+_cn+';'+_cno+';'+_cp+'%'+nl+nl;
+  csv+='Questao;Tipo;Gabarito;Resposta;Pontos'+nl;
+  [1,2].forEach(function(q){csv+='Q'+q+';Discursiva;-;'+alu.disc[q].pts.toFixed(1)+' pts;'+alu.disc[q].pts.toFixed(2)+nl;});
+  OQS.forEach(function(q){var g=gab.obj[q]||'?',a=alu.obj[q]||'Branco';csv+='Q'+q+';Objetiva;'+g+';'+a+';'+(g===a?'1.00':'0.00')+nl;});
+  SQS.forEach(function(q){var g=gab.soma[q],a=alu.soma[q];var p=calcSomaPts(g,a);csv+='Q'+q+';Somatoria;'+(g!==null?g+'('+decomporSoma(g).join('+')+')':'?')+';'+(a!==null?a+'('+decomporSoma(a).join('+')+')':'Branco')+';'+p.toFixed(2)+nl;});
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var lnk=document.createElement('a');lnk.href=url;lnk.download='gabarito_'+_cn.replace(/[^a-z0-9]/gi,'_')+'.csv';lnk.click();URL.revokeObjectURL(url);
+}
+
+function novaCorrecao(){
+  alu={obj:{3:null,4:null,5:null,6:null,7:null,8:null},soma:{9:null,10:null},disc:{1:{pts:0},2:{pts:0}}};
+  imgB64=null;
+  var p=document.getElementById('iprev');p.style.display='none';p.src='';
+  document.getElementById('uz').style.display='block';
+  document.getElementById('bia').disabled=true;
+  document.getElementById('ca').style.display='none';
+  document.getElementById('al').style.display='none';
+  document.getElementById('ast').style.display='none';
+  document.getElementById('anome').value='';
+  document.getElementById('anum').value='';
+  document.getElementById('fi').value='';
+  goTab(1);
+}
+
+init();
+</script>
+</body>
+</html>
