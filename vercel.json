@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "public",
   "framework": null,
   "buildCommand": null,
   "installCommand": "echo \"Instalação não é necessária\""
