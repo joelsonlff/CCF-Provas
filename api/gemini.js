@@ -10,6 +10,9 @@ module.exports = async function handler(req, res) {
     process.env.GEMINI_KEY_1,
     process.env.GEMINI_KEY_2,
     process.env.GEMINI_KEY_3,
+    process.env.Google01,
+    process.env.Google02,
+    process.env.Google03,
   ].filter(Boolean);
 
   if (keys.length === 0) {

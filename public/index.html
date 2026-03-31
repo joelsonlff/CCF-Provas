@@ -404,17 +404,38 @@ function salvar(){
   goTab(1);
 }
 
+// COMPRESSAO CLIENT-SIDE (Evitar max payload 4.5MB da Vercel)
+function resizeImageFile(file, maxSize, callback) {
+  var r = new FileReader();
+  r.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round((h * maxSize) / w); w = maxSize; }
+        else { w = Math.round((w * maxSize) / h); h = maxSize; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      callback(dataUrl);
+    };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(file);
+}
+
 // UPLOAD INDIVIDUAL
 function handleFile(e){
   var file=e.target.files[0];if(!file)return;
-  var r=new FileReader();
-  r.onload=function(ev){
-    var src=ev.target.result;imgB64=src.split(',')[1];
-    var p=document.getElementById('iprev');p.src=src;p.style.display='block';
+  resizeImageFile(file, 1600, function(dataUrl) {
+    imgB64 = dataUrl.split(',')[1];
+    var p=document.getElementById('iprev');p.src=dataUrl;p.style.display='block';
     document.getElementById('bia').disabled=false;
     document.getElementById('uz').style.display='none';
-  };
-  r.readAsDataURL(file);
+  });
 }
 
 // PROMPT IA
@@ -531,9 +552,8 @@ function processarLote(){
     var i=idx++;
     var st=document.getElementById('ls'+i);
     if(st)st.textContent='⟳ Processando...';if(st)st.className='lote-status proc';
-    var r=new FileReader();
-    r.onload=function(ev){
-      var b64=ev.target.result.split(',')[1];
+    resizeImageFile(loteFiles[i], 1600, function(dataUrl) {
+      var b64=dataUrl.split(',')[1];
       chamarIA(b64,buildPrompt(true),function(parsed,err){
         var pct=Math.round((i+1)/loteFiles.length*100);
         document.getElementById('prog-fill').style.width=pct+'%';
@@ -562,8 +582,7 @@ function processarLote(){
         document.getElementById('lote-resumo').style.display='block';
         setTimeout(proxima,300);
       });
-    };
-    r.readAsDataURL(loteFiles[i]);
+    });
   }
   proxima();
 }
