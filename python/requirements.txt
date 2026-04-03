@@ -1,5 +1,5 @@
-# Adicione aqui as bibliotecas que iremos usar no projeto Python
-# Exemplos que podem ser úteis:
 google-generativeai
 pillow
 python-dotenv
+opencv-python
+numpy
