@@ -4,23 +4,27 @@ omr_processor.py
 OMR (Optical Mark Recognition) local para folhas de resposta CCF.
 Detecta bolhas preenchidas usando OpenCV — sem chamadas a APIs externas.
 
-Layout da folha (de cima para baixo, após alinhamento):
-  [Cabeçalho]  Logo + nome do aluno + QR codes
-  [Q01–Q02]    Questões discursivas — ignoradas
-  [Q03–Q08]    6 objetivas em grade 2 colunas × 3 linhas, 5 bolhas (A–E) cada
-  [Q09–Q10]    2 somatórias, cada uma com:
-                 Fileira Dez: bolhas 0–9 (uma selecionada)
-                 Fileira Uni: bolhas 0–9 (uma selecionada)
-                 Resultado = Dez × 10 + Uni  (inteiro 0–99)
+Layout real da folha CCF (de cima para baixo):
+  [Cabeçalho]       Logo + título + QR REF-1 + campos (aluno, turma, etc.)
+  [Q01–Q02]         Questões discursivas em caixas próprias — ignoradas
+  [QUESTÕES OBJETIVAS]  barra de seção
+  [Q03–Q08]         Grade 2 colunas × 3 linhas, 5 bolhas (A–E) por questão
+  [QUESTÕES SOMATÓRIAS] barra de seção
+  [Q09]             Caixa full-width:  Dez: 0–9  /  Uni: 0–9
+  [Q10]             Caixa full-width:  Dez: 0–9  /  Uni: 0–9  + QR REF-3
+  [Rodapé]          QR REF-2 + texto + caixa NOTA
+
+Resultado somatória = Dez × 10 + Uni  (inteiro 0–99)
 
 Uso:
     from services.omr_processor import process_answer_sheet
     result = process_answer_sheet("foto.jpg")
-    # {"objetivas": ["A","C","B","D","E","A"], "somatorias": [20, 10]}
+    # {"objetivas": {3:"A",...}, "somatorias": {9:20, 10:10}}
 
 Calibração:
-    Execute `python services/calibrate.py foto.jpg` para visualizar a grade
-    detectada e ajustar as constantes LAYOUT_* abaixo conforme necessário.
+    python services/calibrate.py imagens_provas/foto.jpg
+    → debug_warped.jpg e debug_calibrate.jpg para verificar o alinhamento.
+    Ajuste as constantes de LAYOUT abaixo se necessário.
 """
 
 import cv2
@@ -36,30 +40,35 @@ WARP_H = 1100  # altura do canvas normalizado (px)
 # ═══════════════════════════════════════════════════════════════════════════════
 # LAYOUT — coordenadas normalizadas (0.0–1.0) relativas ao canvas warped
 #
-# ⚠  CALIBRAÇÃO: se os resultados estiverem errados, execute:
-#       python services/calibrate.py caminho/para/folha.jpg
-#    O script gera debug_calibrate.jpg mostrando a grade detectada.
-#    Ajuste os valores abaixo até a grade cobrir as bolhas corretamente.
+# Derivadas da leitura visual do PDF da folha CCF real.
+# ⚠  Se os resultados estiverem errados, rode:
+#       python services/calibrate.py imagens_provas/foto.jpg
+#    e ajuste os valores abaixo até a grade cobrir as bolhas.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Objetivas Q03–Q08 ────────────────────────────────────────────────────────
-# Cada questão ocupa uma célula em grade 2 colunas × 3 linhas.
-# Coluna esquerda: Q03, Q05, Q07 | Coluna direita: Q04, Q06, Q08
+# Grade 2 colunas × 3 linhas. Coluna esq: Q03,Q05,Q07 | dir: Q04,Q06,Q08.
+# As faixas X aqui JÁ excluem o rótulo "Q0X" à esquerda de cada célula.
+# Calibradas visualmente a partir do PDF/JPG real da folha CCF.
 
-OBJ_ALTS = 5           # alternativas por questão (A, B, C, D, E)
+OBJ_ALTS = 5
 OBJ_ALT_LABELS = ['A', 'B', 'C', 'D', 'E']
 
-# Faixa Y de cada linha de objetivas [y_topo, y_base] normalizados
+# Faixa Y de cada linha [y_topo, y_base]
+# - Linha 0 começa após a barra "QUESTÕES OBJETIVAS" (~y=0.44)
+# - Linha 2 termina antes da barra "QUESTÕES SOMATÓRIAS" (~y=0.645)
 OBJ_ROWS_Y = [
-    (0.37, 0.47),   # Linha 0: Q03 (esq) e Q04 (dir)
-    (0.49, 0.59),   # Linha 1: Q05 (esq) e Q06 (dir)
-    (0.61, 0.71),   # Linha 2: Q07 (esq) e Q08 (dir)
+    (0.465, 0.510),  # Linha 0: Q03 (esq) e Q04 (dir)
+    (0.515, 0.575),  # Linha 1: Q05 (esq) e Q06 (dir)
+    (0.580, 0.635),  # Linha 2: Q07 (esq) e Q08 (dir)
 ]
 
-# Faixa X de cada coluna [x_esq, x_dir] normalizados
+# Faixa X das BOLHAS (após rótulo "Q0X").
+# - Coluna direita termina em 0.93 (não 0.97) para evitar que o ponto E
+#   caia no espaço em branco além das bolhas, gerando contraste artificial.
 OBJ_COLS_X = [
-    (0.03, 0.47),   # Coluna esquerda
-    (0.53, 0.97),   # Coluna direita
+    (0.12, 0.46),   # Coluna esquerda: bolhas A–E
+    (0.62, 0.93),   # Coluna direita:  bolhas A–E
 ]
 
 # Mapeamento: (linha, coluna) → número da questão
@@ -70,33 +79,43 @@ OBJ_QUESTION_MAP = {
 }
 
 # ── Somatórias Q09–Q10 ───────────────────────────────────────────────────────
-# Cada somatória ocupa uma coluna, com duas fileiras de 10 bolhas (0–9).
+# Q09 e Q10 são BLOCOS FULL-WIDTH empilhados verticalmente (NÃO em colunas).
+# Cada bloco tem 2 fileiras: Dez (0–9) e Uni (0–9).
 
-SOMA_DIGITS = 10   # bolhas por fileira (0–9)
+SOMA_DIGITS = 10  # bolhas por fileira (0–9)
 
-# Faixa Y para as fileiras Dez e Uni normalizados [y_topo, y_base]
-SOMA_DEZ_Y = (0.76, 0.84)
-SOMA_UNI_Y = (0.86, 0.94)
+# Faixa X das bolhas.
+# - Começa em 0.14 (após rótulo "Dez:"/"Uni:" à esquerda)
+# - Termina em 0.86 (evita o QR code REF-3 no canto direito do Q10,
+#   que estava causando falso positivo na posição 9 da fileira Dez)
+SOMA_BUBBLES_X = (0.14, 0.86)
 
-# Faixa X de cada questão somatória
-SOMA_COLS_X = [
-    (0.03, 0.47),   # Q09
-    (0.53, 0.97),   # Q10
-]
+# Q09 — primeiro bloco somatório
+SOMA_Q09_DEZ_Y = (0.700, 0.745)
+SOMA_Q09_UNI_Y = (0.755, 0.800)
+
+# Q10 — segundo bloco somatório (abaixo do Q09)
+SOMA_Q10_DEZ_Y = (0.815, 0.860)
+SOMA_Q10_UNI_Y = (0.870, 0.918)
 
 SOMA_QUESTION_MAP = {0: 9, 1: 10}
 
-# ── Detecção de bolhas ───────────────────────────────────────────────────────
-# Uma bolha é considerada PREENCHIDA se a intensidade média dos pixels na
-# região for menor que este limiar (0–255, quanto menor, mais escuro).
-FILL_INTENSITY_THRESHOLD = 160
+# ── Limiares de detecção ─────────────────────────────────────────────────────
+# Intensidade máxima para considerar uma bolha PREENCHIDA (0–255).
+# Bolhas vazias têm intensidade média ~210–240 (branco).
+# Bolhas preenchidas a caneta azul/preta: ~70–110 (escuro).
+# Valor 125 evita falsos positivos de bordas de bolhas (~147) e
+# garante detecção de bolhas com tinta (~70–110).
+FILL_INTENSITY_THRESHOLD = 125
 
-# Contraste mínimo (diferença de intensidade) entre a bolha mais escura e a
-# mais clara do grupo. Evita marcação quando a folha está em branco.
-MIN_CONTRAST_OBJ = 25
+# Contraste mínimo entre a bolha mais escura e a mais clara do grupo.
+# Num gabarito em branco: contraste real das bolhas ~16–20 (ruído de borda).
+# Numa bolha preenchida: contraste ~80–150.
+# Valor 40 evita falsos positivos em gabaritos em branco.
+MIN_CONTRAST_OBJ = 40
 
-# Limiar de preenchimento para somatórias (bolha preenchida se intensidade < limiar)
-FILL_THRESHOLD_SOMA = 140
+# Limiar para somatórias (igual ao das objetivas após a correção do QR code)
+FILL_THRESHOLD_SOMA = 125
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -293,39 +312,38 @@ def _read_objective_questions(gray: np.ndarray) -> dict[int, Optional[str]]:
 def _read_summation_questions(gray: np.ndarray) -> dict[int, Optional[int]]:
     """
     Lê as 2 questões somatórias (Q09–Q10).
-    Cada questão tem fileira Dez (0–9) e fileira Uni (0–9).
-    Retorna {9: 20, 10: 10, ...}  (None = ilegível)
+    Q09 e Q10 são blocos full-width empilhados verticalmente.
+    Cada bloco tem fileira Dez (0–9) e Uni (0–9).
+    Retorna {9: 20, 10: 10}  (None = ilegível)
     """
+    # Layout: (q_num, dez_y_range, uni_y_range)
+    soma_layout = [
+        (9,  SOMA_Q09_DEZ_Y, SOMA_Q09_UNI_Y),
+        (10, SOMA_Q10_DEZ_Y, SOMA_Q10_UNI_Y),
+    ]
+
+    x0_n, x1_n = SOMA_BUBBLES_X
+
+    def pick_digit(intensities: list[float]) -> Optional[int]:
+        min_val = min(intensities)
+        max_val = max(intensities)
+        if max_val - min_val < MIN_CONTRAST_OBJ:
+            return None
+        if min_val > FILL_THRESHOLD_SOMA:
+            return None
+        return int(np.argmin(intensities))
+
     results: dict[int, Optional[int]] = {}
-
-    for col_idx, (x0_n, x1_n) in enumerate(SOMA_COLS_X):
-        q_num = SOMA_QUESTION_MAP[col_idx]
-
-        # Fileira das dezenas
+    for q_num, dez_y, uni_y in soma_layout:
         dez_intensities = _read_bubble_row(
-            gray, x0_n, SOMA_DEZ_Y[0], x1_n, SOMA_DEZ_Y[1], SOMA_DIGITS
+            gray, x0_n, dez_y[0], x1_n, dez_y[1], SOMA_DIGITS
         )
-        # Fileira das unidades
         uni_intensities = _read_bubble_row(
-            gray, x0_n, SOMA_UNI_Y[0], x1_n, SOMA_UNI_Y[1], SOMA_DIGITS
+            gray, x0_n, uni_y[0], x1_n, uni_y[1], SOMA_DIGITS
         )
-
-        def pick_digit(intensities: list[float]) -> Optional[int]:
-            min_val = min(intensities)
-            max_val = max(intensities)
-            if max_val - min_val < MIN_CONTRAST_OBJ:
-                return None
-            if min_val > FILL_THRESHOLD_SOMA:
-                return None
-            return int(np.argmin(intensities))
-
         dez = pick_digit(dez_intensities)
         uni = pick_digit(uni_intensities)
-
-        if dez is None or uni is None:
-            results[q_num] = None
-        else:
-            results[q_num] = dez * 10 + uni
+        results[q_num] = (dez * 10 + uni) if (dez is not None and uni is not None) else None
 
     return results
 
@@ -511,11 +529,12 @@ def _draw_debug(warped: np.ndarray, gray: np.ndarray, path: str) -> None:
             q = OBJ_QUESTION_MAP[(row_idx, col_idx)]
             draw_row(x0, y0, x1, y1, OBJ_ALTS, f"Q{q:02d}")
 
-    # Somatórias
-    for col_idx, (x0, x1) in enumerate(SOMA_COLS_X):
-        q = SOMA_QUESTION_MAP[col_idx]
-        draw_row(x0, SOMA_DEZ_Y[0], x1, SOMA_DEZ_Y[1], SOMA_DIGITS, f"Q{q:02d} Dez")
-        draw_row(x0, SOMA_UNI_Y[0], x1, SOMA_UNI_Y[1], SOMA_DIGITS, f"Q{q:02d} Uni")
+    # Somatórias (full-width, empilhadas)
+    x0, x1 = SOMA_BUBBLES_X
+    draw_row(x0, SOMA_Q09_DEZ_Y[0], x1, SOMA_Q09_DEZ_Y[1], SOMA_DIGITS, "Q09 Dez")
+    draw_row(x0, SOMA_Q09_UNI_Y[0], x1, SOMA_Q09_UNI_Y[1], SOMA_DIGITS, "Q09 Uni")
+    draw_row(x0, SOMA_Q10_DEZ_Y[0], x1, SOMA_Q10_DEZ_Y[1], SOMA_DIGITS, "Q10 Dez")
+    draw_row(x0, SOMA_Q10_UNI_Y[0], x1, SOMA_Q10_UNI_Y[1], SOMA_DIGITS, "Q10 Uni")
 
     cv2.imwrite(path, annotated)
     print(f"[DEBUG] Grade anotada salva em: {path}")

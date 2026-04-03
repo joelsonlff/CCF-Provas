@@ -34,7 +34,10 @@ from services.omr_processor import (
     _draw_debug,
     _read_bubble_row,
     OBJ_ROWS_Y, OBJ_COLS_X, OBJ_ALTS, OBJ_QUESTION_MAP,
-    SOMA_COLS_X, SOMA_DEZ_Y, SOMA_UNI_Y, SOMA_DIGITS, SOMA_QUESTION_MAP,
+    SOMA_BUBBLES_X,
+    SOMA_Q09_DEZ_Y, SOMA_Q09_UNI_Y,
+    SOMA_Q10_DEZ_Y, SOMA_Q10_UNI_Y,
+    SOMA_DIGITS, SOMA_QUESTION_MAP,
     WARP_W, WARP_H,
 )
 
@@ -83,11 +86,15 @@ def run_calibration(image_path: str) -> None:
 
     # ── Imprimir intensidades das somatórias ──────────────────────────────────
     print("\n── SOMATÓRIAS ───────────────────────────────────────")
-    for col_idx, (x0, x1) in enumerate(SOMA_COLS_X):
-        q = SOMA_QUESTION_MAP[col_idx]
-
-        dez = _read_bubble_row(gray, x0, SOMA_DEZ_Y[0], x1, SOMA_DEZ_Y[1], SOMA_DIGITS)
-        uni = _read_bubble_row(gray, x0, SOMA_UNI_Y[0], x1, SOMA_UNI_Y[1], SOMA_DIGITS)
+    bx0, bx1 = SOMA_BUBBLES_X
+    soma_layout_cal = [
+        (9,  SOMA_Q09_DEZ_Y, SOMA_Q09_UNI_Y),
+        (10, SOMA_Q10_DEZ_Y, SOMA_Q10_UNI_Y),
+    ]
+    for q, dez_y, uni_y in soma_layout_cal:
+        x0, x1 = bx0, bx1
+        dez = _read_bubble_row(gray, x0, dez_y[0], x1, dez_y[1], SOMA_DIGITS)
+        uni = _read_bubble_row(gray, x0, uni_y[0], x1, uni_y[1], SOMA_DIGITS)
 
         fmt_dez = "  ".join(
             f"{i}:{v:5.1f}{'*' if v == min(dez) else ' '}"
