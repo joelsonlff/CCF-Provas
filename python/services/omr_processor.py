@@ -55,20 +55,20 @@ OBJ_ALTS = 5
 OBJ_ALT_LABELS = ['A', 'B', 'C', 'D', 'E']
 
 # Faixa Y de cada linha [y_topo, y_base]
-# - Linha 0 começa após a barra "QUESTÕES OBJETIVAS" (~y=0.44)
-# - Linha 2 termina antes da barra "QUESTÕES SOMATÓRIAS" (~y=0.645)
+# Calibradas com HoughCircles na folha v5 (centros medidos em px/1100):
+#   Linha 0: cy≈595  |  Linha 1: cy≈647  |  Linha 2: cy≈700
 OBJ_ROWS_Y = [
-    (0.465, 0.510),  # Linha 0: Q03 (esq) e Q04 (dir)
-    (0.515, 0.575),  # Linha 1: Q05 (esq) e Q06 (dir)
-    (0.580, 0.635),  # Linha 2: Q07 (esq) e Q08 (dir)
+    (0.520, 0.562),  # Linha 0: Q03/Q04  cy≈595 (0.541)
+    (0.567, 0.609),  # Linha 1: Q05/Q06  cy≈647 (0.588)
+    (0.615, 0.657),  # Linha 2: Q07/Q08  cy≈700 (0.636)
 ]
 
-# Faixa X das BOLHAS (após rótulo "Q0X").
-# - Coluna direita termina em 0.93 (não 0.97) para evitar que o ponto E
-#   caia no espaço em branco além das bolhas, gerando contraste artificial.
+# Faixa X das BOLHAS (HoughCircles folha v5):
+#   Coluna esq: cx_min=0.119, cx_max=0.346, r≈0.020 → margem 0.099..0.366
+#   Coluna dir: cx_min=0.604, cx_max=0.830, r≈0.020 → margem 0.584..0.850
 OBJ_COLS_X = [
-    (0.12, 0.46),   # Coluna esquerda: bolhas A–E
-    (0.62, 0.93),   # Coluna direita:  bolhas A–E
+    (0.112, 0.366),  # Coluna esquerda: bolhas A–E  (cx_A=0.119, margem -r)
+    (0.598, 0.850),  # Coluna direita:  bolhas A–E  (cx_A=0.604, margem -r)
 ]
 
 # Mapeamento: (linha, coluna) → número da questão
@@ -84,19 +84,21 @@ OBJ_QUESTION_MAP = {
 
 SOMA_DIGITS = 10  # bolhas por fileira (0–9)
 
-# Faixa X das bolhas.
-# - Começa em 0.14 (após rótulo "Dez:"/"Uni:" à esquerda)
-# - Termina em 0.86 (evita o QR code REF-3 no canto direito do Q10,
-#   que estava causando falso positivo na posição 9 da fileira Dez)
-SOMA_BUBBLES_X = (0.14, 0.86)
+# Faixa X das bolhas (medida com HoughCircles na folha v4):
+#   10 bolhas: cx=97..424, r≈16 → (97-20)/800=0.096 .. (424+20)/800=0.555
+#   Rótulos "Dez:"/"Uni:" ocupam aprox x=0..0.096, começa logo depois.
+# Faixa X das bolhas somatórias (HoughCircles folha v5):
+#   cx_min=0.119, cx_max=0.606, r≈0.021 → margem 0.098..0.627
+SOMA_BUBBLES_X = (0.098, 0.627)
 
-# Q09 — primeiro bloco somatório
-SOMA_Q09_DEZ_Y = (0.700, 0.745)
-SOMA_Q09_UNI_Y = (0.755, 0.800)
+# Q09 — Dez: cy≈812 (0.738) | Uni: cy≈843 (0.766)
+# Bandas estreitas e sem sobreposição (gap = 2px entre elas)
+SOMA_Q09_DEZ_Y = (0.719, 0.752)   # centro 0.738, ±0.019
+SOMA_Q09_UNI_Y = (0.754, 0.787)   # centro 0.766, ±0.019 (começa após Dez)
 
-# Q10 — segundo bloco somatório (abaixo do Q09)
-SOMA_Q10_DEZ_Y = (0.815, 0.860)
-SOMA_Q10_UNI_Y = (0.870, 0.918)
+# Q10 — Dez: cy≈945 (0.859) | Uni: cy≈976 (0.887)
+SOMA_Q10_DEZ_Y = (0.840, 0.875)   # centro 0.859, ±0.019
+SOMA_Q10_UNI_Y = (0.877, 0.910)   # centro 0.887, ±0.019 (começa após Dez)
 
 SOMA_QUESTION_MAP = {0: 9, 1: 10}
 
@@ -145,35 +147,84 @@ def _order_corners(pts: np.ndarray) -> np.ndarray:
 
 def _detect_sheet_corners(img_bgr: np.ndarray) -> Optional[np.ndarray]:
     """
-    Tenta detectar o contorno retangular da folha de resposta.
-    Retorna os 4 cantos ordenados, ou None se não encontrar.
+    Detecta os 4 cantos da folha de resposta.
+
+    Estratégia 1 (preferida): localiza os 4 marcadores fiduciais pretos
+    (quadrados sólidos ~8×8mm nos cantos da folha v4+).
+
+    Estratégia 2 (fallback): detecta o maior contorno retangular da imagem
+    (funciona quando há contraste entre a folha e o fundo).
+
+    Retorna array float32 com 4 pontos ordenados [topo-esq, topo-dir,
+    baixo-dir, baixo-esq], ou None se nenhuma estratégia funcionar.
     """
     h, w = img_bgr.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
-    # Reduz resolução para processar mais rápido
+    # ── Estratégia 1: marcadores fiduciais pretos nos cantos ─────────────────
+    # Os marcadores são quadrados ~8×8mm (≈22×22px a 72dpi).
+    # Threshold agressivo para isolar apenas regiões muito escuras.
+    _, dark_mask = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Filtra contornos quadrados com tamanho plausível para um marcador
+    min_marker_px = int(min(h, w) * 0.012)   # ≈ 1.2% da dimensão menor
+    max_marker_px = int(min(h, w) * 0.07)    # ≈ 7%
+    candidates = []
+    for cnt in contours:
+        x, y, cw, ch = cv2.boundingRect(cnt)
+        if not (min_marker_px < cw < max_marker_px and min_marker_px < ch < max_marker_px):
+            continue
+        aspect = cw / ch
+        if not (0.5 < aspect < 2.0):
+            continue
+        area = cv2.contourArea(cnt)
+        if area < min_marker_px * min_marker_px * 0.3:
+            continue
+        cx, cy = x + cw // 2, y + ch // 2
+        candidates.append((cx, cy, area))
+
+    if len(candidates) >= 4:
+        # Seleciona o maior marcador de cada quadrante
+        cx_mid, cy_mid = w / 2, h / 2
+        quadrants = {
+            'tl': [c for c in candidates if c[0] < cx_mid and c[1] < cy_mid],
+            'tr': [c for c in candidates if c[0] >= cx_mid and c[1] < cy_mid],
+            'br': [c for c in candidates if c[0] >= cx_mid and c[1] >= cy_mid],
+            'bl': [c for c in candidates if c[0] < cx_mid and c[1] >= cy_mid],
+        }
+        if all(quadrants[q] for q in ('tl', 'tr', 'br', 'bl')):
+            pick = lambda q: max(q, key=lambda c: c[2])
+            tl = pick(quadrants['tl'])
+            tr = pick(quadrants['tr'])
+            br = pick(quadrants['br'])
+            bl = pick(quadrants['bl'])
+            corners = np.float32([
+                [tl[0], tl[1]],
+                [tr[0], tr[1]],
+                [br[0], br[1]],
+                [bl[0], bl[1]],
+            ])
+            return corners
+
+    # ── Estratégia 2: maior contorno retangular (folha vs fundo contrastante) ─
     scale = min(1.0, 1200 / max(h, w))
     work = cv2.resize(gray, (int(w * scale), int(h * scale)))
-
-    # Suavização e detecção de bordas
     blurred = cv2.GaussianBlur(work, (5, 5), 0)
     edges = _auto_canny(blurred)
     edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
 
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
-
+    contours2, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours2 = sorted(contours2, key=cv2.contourArea, reverse=True)[:10]
     min_area = 0.15 * work.shape[0] * work.shape[1]
 
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area < min_area:
+    for cnt in contours2:
+        if cv2.contourArea(cnt) < min_area:
             break
         peri = cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
         if len(approx) == 4:
-            corners = _order_corners(approx) / scale
-            return corners.astype(np.float32)
+            return (_order_corners(approx) / scale).astype(np.float32)
 
     return None
 
