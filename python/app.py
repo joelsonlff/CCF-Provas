@@ -326,15 +326,18 @@ if not API_KEYS:
 st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 1 — Gabarito (opcional)</div>', unsafe_allow_html=True)
 st.caption("Preencha para calcular a nota automaticamente. Deixe em branco para ver apenas as respostas.")
 
-alts = ["—", "A", "B", "C", "D", "E"]
 gabarito = {}
 
 st.markdown('<div class="ccf-section-bar">Questões Objetivas (Q03 – Q08)</div>', unsafe_allow_html=True)
-cols = st.columns(6)
-for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
-    with cols[i]:
-        sel = st.selectbox(f"Q{q}", alts, key=f"gab_q{q}")
-        gabarito[f"Q{q}"] = sel if sel != "—" else ""
+for q in ["3", "4", "5", "6", "7", "8"]:
+    sel = st.radio(
+        f"Q{q}",
+        options=["—", "A", "B", "C", "D", "E"],
+        index=0,
+        horizontal=True,
+        key=f"gab_q{q}",
+    )
+    gabarito[f"Q{q}"] = sel if sel != "—" else ""
 
 st.markdown('<div class="ccf-section-bar" style="margin-top:14px">Questões Somatórias (Q09 – Q10)</div>', unsafe_allow_html=True)
 st.caption("Digite o valor correto (0 a 99). Deixe em branco se não quiser corrigir essa questão.")
