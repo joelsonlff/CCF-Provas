@@ -326,29 +326,35 @@ if not API_KEYS:
 st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 1 — Gabarito (opcional)</div>', unsafe_allow_html=True)
 st.caption("Preencha para calcular a nota automaticamente. Deixe em branco para ver apenas as respostas.")
 
-alts = ["", "A", "B", "C", "D", "E"]
+alts = ["—", "A", "B", "C", "D", "E"]
 gabarito = {}
 
 st.markdown('<div class="ccf-section-bar">Questões Objetivas (Q03 – Q08)</div>', unsafe_allow_html=True)
 cols = st.columns(6)
 for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
     with cols[i]:
-        gabarito[f"Q{q}"] = st.selectbox(f"Q{q}", alts, key=f"gab_q{q}")
+        sel = st.selectbox(f"Q{q}", alts, key=f"gab_q{q}")
+        gabarito[f"Q{q}"] = sel if sel != "—" else ""
 
 st.markdown('<div class="ccf-section-bar" style="margin-top:14px">Questões Somatórias (Q09 – Q10)</div>', unsafe_allow_html=True)
+st.caption("Digite o valor correto (0 a 99). Deixe em branco se não quiser corrigir essa questão.")
 
 col_s1, col_s2, col_s3 = st.columns([2, 2, 2])
 with col_s1:
-    v9_ativo = st.checkbox("Q09 tem gabarito", key="gab_soma9_ativo")
-    v9 = st.number_input("Q09 (0–99)", min_value=0, max_value=99, value=0, step=1,
-                         key="gab_soma9", disabled=not v9_ativo)
-    gabarito["SOMA9"] = v9 if v9_ativo else None
+    v9_str = st.text_input("Q09 — valor correto", placeholder="ex: 45", key="gab_soma9")
+    try:
+        gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
+    except ValueError:
+        gabarito["SOMA9"] = None
+        st.caption("⚠️ Digite apenas números")
 
 with col_s2:
-    v10_ativo = st.checkbox("Q10 tem gabarito", key="gab_soma10_ativo")
-    v10 = st.number_input("Q10 (0–99)", min_value=0, max_value=99, value=0, step=1,
-                          key="gab_soma10", disabled=not v10_ativo)
-    gabarito["SOMA10"] = v10 if v10_ativo else None
+    v10_str = st.text_input("Q10 — valor correto", placeholder="ex: 30", key="gab_soma10")
+    try:
+        gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
+    except ValueError:
+        gabarito["SOMA10"] = None
+        st.caption("⚠️ Digite apenas números")
 
 with col_s3:
     peso_soma = st.number_input("Pontos por somatória correta", min_value=0.0,
