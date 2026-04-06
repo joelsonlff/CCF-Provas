@@ -10,7 +10,9 @@ import os
 import csv
 import io
 import time
+import base64
 import threading
+from pathlib import Path
 from datetime import datetime
 
 import google.generativeai as genai
@@ -25,25 +27,30 @@ st.set_page_config(
     layout="centered",
 )
 
+# ── Logo em base64 ────────────────────────────────────────────────────────────
+_logo_path = Path(__file__).parent / "assets" / "logo_ccf.png"
+_logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode() if _logo_path.exists() else ""
+
 # ── Estilo visual (tema CCF) ──────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Fundo geral */
-[data-testid="stAppViewContainer"] {
-    background: #FDF8F0;
-}
-[data-testid="stHeader"] {
-    background: transparent;
-}
+/* Remove padding padrão do Streamlit */
+[data-testid="stAppViewContainer"] { background: #FDF8F0; }
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="block-container"] { padding-top: 0 !important; }
+.block-container { padding-top: 1rem !important; }
 
-/* Cabeçalho CCF */
+/* ── Cabeçalho ── */
 .ccf-header {
-    background: linear-gradient(135deg, #5C0F12, #7B1518 70%, #9B2528);
+    background: linear-gradient(135deg, #5C0F12, #7B1518 60%, #9B2528);
     border-radius: 14px;
-    padding: 18px 22px 15px;
-    margin-bottom: 24px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 .ccf-header::after {
     content: '';
@@ -52,57 +59,62 @@ st.markdown("""
     height: 3px;
     background: #C4982A;
 }
-.ccf-header h1 {
-    color: white;
-    font-size: 20px;
-    font-weight: 700;
-    margin: 0 0 2px;
+.ccf-logo-box {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(196,152,42,0.35);
+    border-radius: 10px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
-.ccf-header p {
-    color: rgba(255,255,255,0.6);
-    font-size: 12px;
-    margin: 0;
-}
+.ccf-logo-box img { height: 42px; width: auto; }
+.ccf-logo-text strong { font-size: 11px; font-weight: 700; color: white; display: block; }
+.ccf-logo-text span  { font-size: 9px; color: rgba(255,255,255,0.6); }
+.ccf-title { flex: 1; }
+.ccf-title h1 { font-size: 18px; font-weight: 700; color: white; margin: 0 0 2px; }
+.ccf-title p  { font-size: 11px; color: rgba(255,255,255,0.6); margin: 0; }
 .ccf-badge {
-    display: inline-block;
     background: rgba(30,138,76,0.25);
     border: 1px solid rgba(30,138,76,0.5);
     color: #7fffc0;
-    font-size: 11px;
+    font-size: 10px;
     padding: 3px 10px;
     border-radius: 20px;
-    margin-top: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-/* Cards */
+/* ── Cards ── */
 .ccf-card {
     background: white;
     border: 1px solid #E0D5C5;
     border-radius: 12px;
-    padding: 18px;
+    padding: 18px 18px 8px;
     margin-bottom: 14px;
     box-shadow: 0 1px 5px rgba(123,21,24,0.05);
 }
 .ccf-card-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: #C4982A;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 .ccf-section-bar {
     background: #7B1518;
     color: white;
-    padding: 7px 12px;
-    border-radius: 8px;
-    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: .5px;
-    margin-bottom: 12px;
+    margin: 10px 0 8px;
 }
 
-/* Botão primário */
+/* ── Botões ── */
 div.stButton > button[kind="primary"] {
     background: #7B1518 !important;
     border: none !important;
@@ -110,21 +122,10 @@ div.stButton > button[kind="primary"] {
     font-weight: 700 !important;
     border-radius: 9px !important;
     padding: 10px 20px !important;
+    font-size: 14px !important;
 }
-div.stButton > button[kind="primary"]:hover {
-    background: #5C0F12 !important;
-}
+div.stButton > button[kind="primary"]:hover { background: #5C0F12 !important; }
 
-/* Selectbox e inputs */
-div[data-baseweb="select"] > div {
-    border-color: #E0D5C5 !important;
-    background: #FDF8F0 !important;
-}
-div[data-baseweb="select"] > div:focus-within {
-    border-color: #C4982A !important;
-}
-
-/* Download button */
 div.stDownloadButton > button {
     background: white !important;
     border: 1.5px solid #7B1518 !important;
@@ -132,17 +133,34 @@ div.stDownloadButton > button {
     font-weight: 700 !important;
     border-radius: 9px !important;
 }
-div.stDownloadButton > button:hover {
-    background: #FDF8F0 !important;
+div.stDownloadButton > button:hover { background: #FDF8F0 !important; }
+
+/* ── Radio buttons do gabarito ── */
+div[data-testid="stRadio"] label { font-size: 13px !important; }
+div[data-testid="stRadio"] > div { gap: 4px !important; }
+
+/* ── File uploader ── */
+[data-testid="stFileUploader"] {
+    border: 2px dashed #E0D5C5 !important;
+    border-radius: 12px !important;
+    background: #F5F0E8 !important;
+    padding: 10px !important;
 }
 
-/* Rodapé */
+/* ── Inputs ── */
+div[data-baseweb="input"] input {
+    border-color: #E0D5C5 !important;
+    background: #FDF8F0 !important;
+}
+div[data-baseweb="input"] input:focus { border-color: #C4982A !important; }
+
+/* ── Rodapé ── */
 .ccf-footer {
     text-align: center;
     font-size: 11px;
     color: #8B5E5F;
-    margin-top: 30px;
-    padding-top: 16px;
+    margin-top: 20px;
+    padding-top: 14px;
     border-top: 1px solid #E0D5C5;
 }
 </style>
@@ -240,22 +258,14 @@ def processar_arquivo(uploaded_file) -> dict:
 def calcular_nota(r: dict, gabarito: dict, peso_soma: float) -> dict:
     obj_q = ["3", "4", "5", "6", "7", "8"]
     acertos_obj = 0
-    detalhes_obj = {}
     for q in obj_q:
-        resposta = r["obj"].get(q, "")
-        correta  = gabarito.get(f"Q{q}", "")
-        if correta and resposta == correta:
+        if gabarito.get(f"Q{q}") and r["obj"].get(q) == gabarito[f"Q{q}"]:
             acertos_obj += 1
-            detalhes_obj[q] = "✅"
-        elif not resposta:
-            detalhes_obj[q] = "—"
-        else:
-            detalhes_obj[q] = f"❌"
 
     acertos_soma = {}
     for q in ["9", "10"]:
+        correta = gabarito.get(f"SOMA{q}")
         resposta = r["soma"].get(q)
-        correta  = gabarito.get(f"SOMA{q}")
         if correta is None:
             acertos_soma[q] = None
         elif resposta is not None and int(resposta) == int(correta):
@@ -263,17 +273,12 @@ def calcular_nota(r: dict, gabarito: dict, peso_soma: float) -> dict:
         else:
             acertos_soma[q] = False
 
-    nota_obj   = acertos_obj * 1.0
+    nota_obj   = float(acertos_obj)
     nota_soma  = sum(peso_soma for ok in acertos_soma.values() if ok)
-    nota_total = nota_obj + nota_soma
-
     return {
         "acertos_obj":  acertos_obj,
-        "detalhes_obj": detalhes_obj,
         "acertos_soma": acertos_soma,
-        "nota_obj":     nota_obj,
-        "nota_soma":    nota_soma,
-        "nota_total":   nota_total,
+        "nota_total":   nota_obj + nota_soma,
     }
 
 
@@ -310,11 +315,24 @@ def gerar_csv(resultados: list, gabarito: dict, peso_soma: float) -> str:
 # INTERFACE
 # ════════════════════════════════════════════════════════
 
-# Cabeçalho
-st.markdown("""
+# ── Cabeçalho com logo ────────────────────────────────────────────────────────
+logo_img_tag = (
+    f'<img src="data:image/png;base64,{_logo_b64}" alt="CCF">'
+    if _logo_b64 else "📝"
+)
+st.markdown(f"""
 <div class="ccf-header">
-  <h1>📝 Leitor de Gabaritos</h1>
-  <p>Centro de Cultura e Fé · Correção automática de folhas de resposta</p>
+  <div class="ccf-logo-box">
+    {logo_img_tag}
+    <div class="ccf-logo-text">
+      <strong>COLÉGIO CORAÇÃO FELIZ</strong>
+      <span>Tubarão — SC</span>
+    </div>
+  </div>
+  <div class="ccf-title">
+    <h1>Leitor de Gabaritos</h1>
+    <p>Correção automática de folhas de resposta</p>
+  </div>
   <span class="ccf-badge">OMR + Gemini AI</span>
 </div>
 """, unsafe_allow_html=True)
@@ -322,29 +340,28 @@ st.markdown("""
 if not API_KEYS:
     st.warning("Nenhuma chave API configurada — o nome dos alunos não será lido. Configure `Google01` nos Secrets do Streamlit Cloud.")
 
-# ── Passo 1: Gabarito ─────────────────────────────────────────────────────────
+# ── PASSO 1: Gabarito ─────────────────────────────────────────────────────────
 st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 1 — Gabarito (opcional)</div>', unsafe_allow_html=True)
-st.caption("Preencha para calcular a nota automaticamente. Deixe em branco para ver apenas as respostas.")
+st.caption("Preencha para calcular nota automaticamente. Deixe em branco para ver apenas as respostas.")
 
 gabarito = {}
 
-st.markdown('<div class="ccf-section-bar">Questões Objetivas (Q03 – Q08)</div>', unsafe_allow_html=True)
-for q in ["3", "4", "5", "6", "7", "8"]:
-    sel = st.radio(
-        f"Q{q}",
-        options=["—", "A", "B", "C", "D", "E"],
-        index=0,
-        horizontal=True,
-        key=f"gab_q{q}",
-    )
-    gabarito[f"Q{q}"] = sel if sel != "—" else ""
+st.markdown('<div class="ccf-section-bar">Questões Objetivas — Q03 a Q08</div>', unsafe_allow_html=True)
+st.caption("Digite a letra correta em CAIXA ALTA (A, B, C, D ou E). Deixe em branco para não corrigir.")
 
-st.markdown('<div class="ccf-section-bar" style="margin-top:14px">Questões Somatórias (Q09 – Q10)</div>', unsafe_allow_html=True)
-st.caption("Digite o valor correto (0 a 99). Deixe em branco se não quiser corrigir essa questão.")
+cols_obj = st.columns(6)
+for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
+    with cols_obj[i]:
+        val = st.text_input(f"Q{q}", placeholder="A–E", max_chars=1, key=f"gab_q{q}")
+        val = val.strip().upper()
+        gabarito[f"Q{q}"] = val if val in ("A", "B", "C", "D", "E") else ""
+
+st.markdown('<div class="ccf-section-bar">Questões Somatórias — Q09 e Q10</div>', unsafe_allow_html=True)
+st.caption("Digite o valor numérico correto (0 a 99) em CAIXA ALTA. Deixe em branco para não corrigir.")
 
 col_s1, col_s2, col_s3 = st.columns([2, 2, 2])
 with col_s1:
-    v9_str = st.text_input("Q09 — valor correto", placeholder="ex: 45", key="gab_soma9")
+    v9_str = st.text_input("Q09 — valor correto", placeholder="Ex: 45", key="gab_soma9")
     try:
         gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
     except ValueError:
@@ -352,7 +369,7 @@ with col_s1:
         st.caption("⚠️ Digite apenas números")
 
 with col_s2:
-    v10_str = st.text_input("Q10 — valor correto", placeholder="ex: 30", key="gab_soma10")
+    v10_str = st.text_input("Q10 — valor correto", placeholder="Ex: 30", key="gab_soma10")
     try:
         gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
     except ValueError:
@@ -360,27 +377,26 @@ with col_s2:
         st.caption("⚠️ Digite apenas números")
 
 with col_s3:
-    peso_soma = st.number_input("Pontos por somatória correta", min_value=0.0,
-                                max_value=10.0, value=1.0, step=0.5, key="peso_soma")
+    peso_soma = st.number_input(
+        "Pontos por somatória correta",
+        min_value=0.0, max_value=10.0, value=1.0, step=0.5,
+        key="peso_soma"
+    )
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Passo 2: Upload ───────────────────────────────────────────────────────────
+# ── PASSO 2: Upload ───────────────────────────────────────────────────────────
 st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 2 — Fotos dos gabaritos</div>', unsafe_allow_html=True)
-
 uploaded = st.file_uploader(
-    "Selecione uma ou várias fotos (JPG, PNG, WEBP)",
+    "Arraste as fotos aqui ou clique para selecionar (JPG, PNG, WEBP)",
     type=["jpg", "jpeg", "png", "webp"],
     accept_multiple_files=True,
-    label_visibility="collapsed",
 )
-
 if uploaded:
     st.caption(f"{len(uploaded)} foto(s) selecionada(s)")
-
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Processar ─────────────────────────────────────────────────────────────────
+# ── Botão processar ───────────────────────────────────────────────────────────
 if uploaded:
     if st.button("▶  Processar gabaritos", type="primary", use_container_width=True):
         resultados = []
@@ -398,7 +414,7 @@ if uploaded:
         progresso.empty()
         status.empty()
 
-        # ── Resultado ─────────────────────────────────────────────────────────
+        # ── PASSO 3: Resultado ────────────────────────────────────────────────
         st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 3 — Resultado</div>', unsafe_allow_html=True)
 
         obj_q  = ["3", "4", "5", "6", "7", "8"]
@@ -410,25 +426,19 @@ if uploaded:
             row = {"Nome": r["nome"] or r["arquivo"]}
             for q in obj_q:
                 resposta = r["obj"].get(q, "")
-                if tem_gabarito and not r["erro"]:
-                    correta = gabarito.get(f"Q{q}", "")
-                    if correta and resposta == correta:
-                        row[f"Q{q}"] = f"✅ {resposta}"
-                    elif correta and resposta:
-                        row[f"Q{q}"] = f"❌ {resposta}"
-                    else:
-                        row[f"Q{q}"] = resposta or "—"
+                correta  = gabarito.get(f"Q{q}", "") if tem_gabarito else ""
+                if correta and resposta == correta:
+                    row[f"Q{q}"] = f"✅ {resposta}"
+                elif correta and resposta:
+                    row[f"Q{q}"] = f"❌ {resposta}"
                 else:
                     row[f"Q{q}"] = resposta or "—"
 
             for q in soma_q:
-                val = r["soma"].get(q, "")
-                if tem_gabarito and not r["erro"]:
-                    correta = gabarito.get(f"SOMA{q}")
-                    if correta is not None and val != "":
-                        row[f"Soma {q}"] = f"✅ {val}" if int(val) == int(correta) else f"❌ {val}"
-                    else:
-                        row[f"Soma {q}"] = str(val) if val != "" else "—"
+                val     = r["soma"].get(q, "")
+                correta = gabarito.get(f"SOMA{q}") if tem_gabarito else None
+                if correta is not None and val != "":
+                    row[f"Soma {q}"] = f"✅ {val}" if int(val) == int(correta) else f"❌ {val}"
                 else:
                     row[f"Soma {q}"] = str(val) if val != "" else "—"
 
@@ -447,12 +457,11 @@ if uploaded:
         # ── Download ──────────────────────────────────────────────────────────
         csv_str  = gerar_csv(resultados, gabarito, peso_soma)
         agora    = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"resultado_turma_{agora}.csv"
 
         st.download_button(
             label="⬇  Baixar planilha CSV",
             data=csv_str.encode("utf-8"),
-            file_name=filename,
+            file_name=f"resultado_turma_{agora}.csv",
             mime="text/csv",
             use_container_width=True,
         )
@@ -465,6 +474,8 @@ if uploaded:
         else:
             st.success("Todos os gabaritos foram lidos com sucesso!")
 
-# Rodapé
-st.markdown('<div class="ccf-footer">CCF · Centro de Cultura e Fé · Leitor de Gabaritos</div>',
-            unsafe_allow_html=True)
+# ── Rodapé ────────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="ccf-footer">Colégio Coração Feliz · Tubarão — SC · Leitor de Gabaritos</div>',
+    unsafe_allow_html=True
+)
