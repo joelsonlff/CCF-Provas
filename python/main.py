@@ -8,11 +8,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from dotenv import load_dotenv
+from PIL import Image
+import google.generativeai as genai
 
 # ── Modo de processamento ─────────────────────────────────────────────────────
 # Uso: python main.py [--modo gemini|omr]
 # Padrão: gemini (usa API do Google)
-#         omr    (processamento local com OpenCV, sem internet)
+#         omr    (processamento local com OpenCV + Gemini só para ler o nome)
 
 MODO = "gemini"
 if "--modo" in sys.argv:
@@ -24,11 +26,6 @@ if MODO not in ("gemini", "omr"):
     print(f"ERRO: modo inválido '{MODO}'. Use --modo gemini ou --modo omr")
     sys.exit(1)
 
-# ── Imports condicionais por modo ─────────────────────────────────────────────
-if MODO == "gemini":
-    from PIL import Image
-    import google.generativeai as genai
-
 if MODO == "omr":
     try:
         from services.omr_processor import process_answer_sheet
@@ -37,23 +34,26 @@ if MODO == "omr":
         print(f"Detalhe: {e}")
         sys.exit(1)
 
-# ── Configuração Gemini (apenas no modo gemini) ───────────────────────────────
+# ── Configuração Gemini ───────────────────────────────────────────────────────
 load_dotenv()
 
 api_keys = []
-if MODO == "gemini":
-    for k, v in os.environ.items():
-        if k.lower().startswith('google') and v.strip():
-            api_keys.append(v.strip())
-    if not api_keys:
-        k = os.getenv("GEMINI_API_KEY")
-        if k:
-            api_keys.append(k)
-        else:
-            print("-> ERRO CRÍTICO: Nenhuma chave API configurada no .env.")
-            print("   Copie o arquivo .env.example para .env e coloque suas chaves lá.")
-            print("   Ou use o modo local: python main.py --modo omr")
-            sys.exit(1)
+for k, v in os.environ.items():
+    if k.lower().startswith('google') and v.strip():
+        api_keys.append(v.strip())
+if not api_keys:
+    k = os.getenv("GEMINI_API_KEY")
+    if k:
+        api_keys.append(k)
+
+if not api_keys:
+    if MODO == "gemini":
+        print("-> ERRO CRÍTICO: Nenhuma chave API configurada no .env.")
+        print("   Copie o arquivo .env.example para .env e coloque suas chaves lá.")
+        print("   Ou use o modo local: python main.py --modo omr")
+        sys.exit(1)
+    else:
+        print("[AVISO] Nenhuma chave API configurada — nome do aluno não será lido.")
 
 # Rodízio de chaves thread-safe
 _key_lock = threading.Lock()
@@ -69,7 +69,9 @@ def next_key():
         current_key_idx = (current_key_idx + 1) % len(api_keys)
         print(f"*** Alternando limite da API. Usando chave: {current_key_idx+1} de {len(api_keys)} ***")
 
-def safe_gemini_call(img, prompt):
+def safe_gemini_call(img, prompt, json_mode=True):
+    if not api_keys:
+        return '{"erro": "Sem chave API configurada"}'
     max_retries = len(api_keys) * 2
     retries = 0
     while retries < max_retries:
@@ -77,12 +79,12 @@ def safe_gemini_call(img, prompt):
             api_key = get_current_key()
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
+            kwargs = {"temperature": 0.0}
+            if json_mode:
+                kwargs["response_mime_type"] = "application/json"
             response = model.generate_content(
                 [prompt, img],
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.0,
-                    response_mime_type="application/json"
-                )
+                generation_config=genai.types.GenerationConfig(**kwargs)
             )
             return response.text
         except Exception as e:
@@ -110,6 +112,26 @@ def resize_image(image_path, max_size=1600):
             new_h = max_size
         img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     return img
+
+def ler_nome_via_gemini(file_path):
+    """Chamada mínima ao Gemini apenas para ler o nome do aluno no cabeçalho."""
+    if not api_keys:
+        return ""
+    try:
+        img = resize_image(file_path, max_size=800)
+        prompt = (
+            "Esta é uma folha de resposta escolar. No cabeçalho há um campo 'ALUNO' "
+            "preenchido pelo aluno com letra de forma em caixa alta. "
+            "Leia o nome escrito nesse campo e responda APENAS com o nome, "
+            "sem pontuação, sem explicação, sem aspas. "
+            "Se não conseguir ler, responda apenas: (ilegível)"
+        )
+        nome = safe_gemini_call(img, prompt, json_mode=False).strip()
+        # Remove aspas ou lixo que o modelo eventualmente adiciona
+        nome = nome.strip('"\'').strip()
+        return nome
+    except Exception:
+        return ""
 
 def build_prompt():
     nAlts = 5
@@ -174,8 +196,8 @@ def processar_imagem_gemini(file_path, prompt, total, idx):
 
 def processar_imagem_omr(file_path, total, idx):
     """
-    Processa uma imagem via OMR local (OpenCV). Retorna dados no formato interno.
-    O formato de saída é normalizado para ser compatível com o CSV gerado pelo modo Gemini.
+    Processa uma imagem via OMR local (OpenCV) para as bolhas +
+    Gemini para ler o nome do aluno no cabeçalho.
     """
     nome_arq = os.path.basename(file_path)
     print(f" -> OMR [{idx}/{total}]: {nome_arq} ...", flush=True)
@@ -186,15 +208,15 @@ def processar_imagem_omr(file_path, total, idx):
             print(f" Falha [{nome_arq}]: {resultado['erro']}")
             return {"arquivo": nome_arq, "erro": resultado["erro"]}
 
-        # Normaliza para o formato usado pelo CSV (compatível com modo Gemini)
-        # omr retorna: {"objetivas": {3:"A",...}, "somatorias": {9:20,...}}
-        # csv espera:  {"obj": {"3":"A",...}, "soma": {"9":20,...}}
         obj_raw = resultado.get("objetivas", {})
         soma_raw = resultado.get("somatorias", {})
 
+        # Lê o nome via Gemini (chamada mínima, imagem pequena)
+        nome_aluno = ler_nome_via_gemini(file_path)
+
         dados = {
             "arquivo": nome_arq,
-            "nome": "",  # OMR local não lê texto do nome
+            "nome": nome_aluno,
             "obj": {str(k): v for k, v in obj_raw.items() if v is not None},
             "soma": {str(k): v for k, v in soma_raw.items() if v is not None},
             "obs": f"[OMR local] Folha detectada: {resultado.get('sheet_detected', False)}",
@@ -202,7 +224,7 @@ def processar_imagem_omr(file_path, total, idx):
 
         obj_str = " ".join(f"Q{k}:{v}" for k, v in sorted(obj_raw.items()) if v)
         soma_str = " ".join(f"Q{k}:{v}" for k, v in sorted(soma_raw.items()) if v is not None)
-        print(f" OK [{nome_arq}] | {obj_str} | {soma_str}")
+        print(f" OK [{nome_arq}] | Aluno: {nome_aluno or '(sem nome)'} | {obj_str} | {soma_str}")
 
         return dados
 
@@ -257,9 +279,10 @@ def main():
                 resultados_map[file_path] = dados
 
     else:  # MODO == "omr"
-        # OMR usa múltiplos workers mas sem limite de API — usa CPUs disponíveis
         n_workers = min(os.cpu_count() or 4, 8)
-        print("Iniciando leitor de gabaritos — modo: OMR local (OpenCV, sem internet)")
+        tem_api = bool(api_keys)
+        print("Iniciando leitor de gabaritos — modo: OMR local (OpenCV)")
+        print(f"Leitura de nome via Gemini: {'sim' if tem_api else 'não (sem chave API)'}")
         print(f"{n_workers} workers | {total} imagens")
 
         resultados_map = {}
