@@ -259,6 +259,32 @@ def processar_arquivo(uploaded_file) -> dict:
         os.unlink(tmp_path)
 
 
+# ── Lógica UFSC para somatórias ──────────────────────────────────────────────
+PROP_VALUES = [1, 2, 4, 8, 16, 32, 64]
+
+def _decode_props(value: int, np: int) -> set:
+    """Decodifica um valor inteiro nas proposições marcadas (potências de 2)."""
+    vals = PROP_VALUES[:np]
+    marked = set()
+    rem = value
+    for i in range(np - 1, -1, -1):
+        if rem >= vals[i]:
+            rem -= vals[i]
+            marked.add(i)
+    return marked  # rem != 0 significa valor inválido para esse np, retorna parcial
+
+def _score_ufsc(np: int, gab_val: int, stu_val: int) -> float:
+    """Pontuação UFSC: (np - erros) / np se acertos > erros, senão 0."""
+    gab = _decode_props(gab_val, np)
+    stu = _decode_props(stu_val, np)
+    ntpc = len(gab)
+    npc  = len(gab & stu)   # proposições certas do aluno
+    npi  = len(stu - gab)   # proposições erradas do aluno
+    if ntpc > 0 and npc > npi:
+        return max(0.0, min(1.0, (np - (ntpc - (npc - npi))) / np))
+    return 0.0
+
+
 def calcular_nota(r: dict, gabarito: dict, peso_soma: float) -> dict:
     obj_q = ["3", "4", "5", "6", "7", "8"]
     acertos_obj = 0
@@ -266,22 +292,23 @@ def calcular_nota(r: dict, gabarito: dict, peso_soma: float) -> dict:
         if gabarito.get(f"Q{q}") and r["obj"].get(q) == gabarito[f"Q{q}"]:
             acertos_obj += 1
 
-    acertos_soma = {}
+    scores_soma = {}
     for q in ["9", "10"]:
-        correta = gabarito.get(f"SOMA{q}")
+        correta  = gabarito.get(f"SOMA{q}")
+        np_count = gabarito.get(f"NP{q}", 4)
         resposta = r["soma"].get(q)
         if correta is None:
-            acertos_soma[q] = None
-        elif resposta is not None and int(resposta) == int(correta):
-            acertos_soma[q] = True
+            scores_soma[q] = None
+        elif resposta is not None:
+            scores_soma[q] = _score_ufsc(np_count, int(correta), int(resposta))
         else:
-            acertos_soma[q] = False
+            scores_soma[q] = 0.0
 
-    nota_obj   = float(acertos_obj)
-    nota_soma  = sum(peso_soma for ok in acertos_soma.values() if ok)
+    nota_obj  = float(acertos_obj)
+    nota_soma = sum(s * peso_soma for s in scores_soma.values() if s is not None)
     return {
         "acertos_obj":  acertos_obj,
-        "acertos_soma": acertos_soma,
+        "scores_soma":  scores_soma,   # float 0.0–1.0 por questão
         "nota_total":   nota_obj + nota_soma,
     }
 
@@ -295,7 +322,7 @@ def gerar_csv(resultados: list, gabarito: dict, peso_soma: float) -> str:
     headers += [f"Q{q}" for q in obj_q]
     headers += [f"SOMA_{q}" for q in soma_q]
     if tem_gabarito:
-        headers += ["Acertos_Obj", "Acertos_Soma", "Nota_Total"]
+        headers += ["Acertos_Obj", "Score_Soma", "Nota_Total"]
     headers += ["Erro"]
 
     buf = io.StringIO()
@@ -307,10 +334,13 @@ def gerar_csv(resultados: list, gabarito: dict, peso_soma: float) -> str:
         for q in soma_q: row[f"SOMA_{q}"] = r["soma"].get(q, "")
         if tem_gabarito and not r["erro"]:
             calc = calcular_nota(r, gabarito, peso_soma)
-            soma_acertos = sum(1 for ok in calc["acertos_soma"].values() if ok)
-            row["Acertos_Obj"]  = calc["acertos_obj"]
-            row["Acertos_Soma"] = soma_acertos
-            row["Nota_Total"]   = f"{calc['nota_total']:.1f}"
+            scores = calc["scores_soma"]
+            soma_str = " | ".join(
+                f"Q{q}:{scores[q]*100:.0f}%" for q in ["9","10"] if scores.get(q) is not None
+            )
+            row["Acertos_Obj"]   = calc["acertos_obj"]
+            row["Score_Soma"]    = soma_str
+            row["Nota_Total"]    = f"{calc['nota_total']:.2f}"
         writer.writerow(row)
     return buf.getvalue()
 
@@ -361,11 +391,21 @@ for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
         gabarito[f"Q{q}"] = val if val in ("A", "B", "C", "D", "E") else ""
 
 st.markdown('<div class="ccf-section-bar">Questões Somatórias — Q09 e Q10</div>', unsafe_allow_html=True)
-st.info("✏️ **Como preencher:** Digite o valor numérico correto (de 0 a 99). Exemplo: se a resposta for Dez=4 e Uni=5, digite **45**. Deixe em branco se não quiser corrigir.")
+st.info(
+    "✏️ **Como preencher:** Digite o **valor do gabarito** (soma das proposições verdadeiras, de 0 a 99). "
+    "Selecione também o **número de proposições** da questão (4, 5, 6 ou 7). "
+    "A pontuação é calculada pelo método UFSC: acertos parciais são considerados. "
+    "Deixe em branco para não corrigir."
+)
 
-col_s1, col_s2, col_s3 = st.columns([2, 2, 2])
+col_s1, col_s2, col_s3 = st.columns([3, 3, 2])
 with col_s1:
-    v9_str = st.text_input("Q09 — valor correto", placeholder="Ex: 45", key="gab_soma9")
+    st.markdown("**Q09**")
+    np9 = st.selectbox("Nº de proposições — Q09", [4, 5, 6, 7], key="np9")
+    gabarito["NP9"] = np9
+    vals9 = ", ".join(str(PROP_VALUES[i]) for i in range(np9))
+    st.caption(f"Valores: {vals9}")
+    v9_str = st.text_input("Valor correto do gabarito", placeholder="Ex: 13", key="gab_soma9")
     try:
         gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
     except ValueError:
@@ -373,7 +413,12 @@ with col_s1:
         st.caption("⚠️ Digite apenas números")
 
 with col_s2:
-    v10_str = st.text_input("Q10 — valor correto", placeholder="Ex: 30", key="gab_soma10")
+    st.markdown("**Q10**")
+    np10 = st.selectbox("Nº de proposições — Q10", [4, 5, 6, 7], key="np10")
+    gabarito["NP10"] = np10
+    vals10 = ", ".join(str(PROP_VALUES[i]) for i in range(np10))
+    st.caption(f"Valores: {vals10}")
+    v10_str = st.text_input("Valor correto do gabarito", placeholder="Ex: 06", key="gab_soma10")
     try:
         gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
     except ValueError:
@@ -381,8 +426,9 @@ with col_s2:
         st.caption("⚠️ Digite apenas números")
 
 with col_s3:
+    st.markdown("**Pontuação**")
     peso_soma = st.number_input(
-        "Pontos por somatória correta",
+        "Pontos por somatória (100%)",
         min_value=0.0, max_value=10.0, value=1.0, step=0.5,
         key="peso_soma"
     )
@@ -439,16 +485,19 @@ if uploaded:
                     row[f"Q{q}"] = resposta or "—"
 
             for q in soma_q:
-                val     = r["soma"].get(q, "")
-                correta = gabarito.get(f"SOMA{q}") if tem_gabarito else None
-                if correta is not None and val != "":
-                    row[f"Soma {q}"] = f"✅ {val}" if int(val) == int(correta) else f"❌ {val}"
+                val = r["soma"].get(q, "")
+                if tem_gabarito and not r["erro"] and gabarito.get(f"SOMA{q}") is not None and val != "":
+                    np_q  = gabarito.get(f"NP{q}", 4)
+                    score = _score_ufsc(np_q, int(gabarito[f"SOMA{q}"]), int(val))
+                    pct   = int(score * 100)
+                    icon  = "✅" if pct == 100 else ("⚠️" if pct > 0 else "❌")
+                    row[f"Soma {q}"] = f"{icon} {val} ({pct}%)"
                 else:
                     row[f"Soma {q}"] = str(val) if val != "" else "—"
 
             if tem_gabarito and not r["erro"]:
                 calc = calcular_nota(r, gabarito, peso_soma)
-                row["Nota"] = f"{calc['nota_total']:.1f}"
+                row["Nota"] = f"{calc['nota_total']:.2f}"
 
             if r["erro"]:
                 row["Erro"] = r["erro"]
