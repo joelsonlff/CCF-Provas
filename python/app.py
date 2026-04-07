@@ -50,8 +50,8 @@ div[data-testid="stTextInput"],
 div[data-testid="stNumberInput"],
 div[data-testid="stFileUploader"] { margin-bottom: 0.2rem !important; }
 
-/* Reduz padding dos labels */
-label { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+/* Reduz padding dos labels mas mantém visíveis */
+label { margin-bottom: 0 !important; padding-bottom: 0 !important; font-size: 12px !important; font-weight: 600 !important; color: #7B1518 !important; }
 
 /* Reduz espaçamento do st.info e st.caption */
 [data-testid="stCaptionContainer"] { margin-top: 0 !important; margin-bottom: 0.2rem !important; }
@@ -420,7 +420,7 @@ with col_s1:
     np9 = st.selectbox("Q09 — Nº de proposições", [4, 5, 6, 7], key="np9")
     gabarito["NP9"] = np9
     vals9 = ", ".join(str(PROP_VALUES[i]) for i in range(np9))
-    v9_str = st.text_input(f"Q09 — Valor correto (props: {vals9})", placeholder="Ex: 13", key="gab_soma9")
+    v9_str = st.text_input(f"Q09 — Valor do gabarito", help=f"Proposições disponíveis: {vals9}", placeholder="Ex: 13", key="gab_soma9")
     try:
         gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
     except ValueError:
@@ -430,7 +430,7 @@ with col_s2:
     np10 = st.selectbox("Q10 — Nº de proposições", [4, 5, 6, 7], key="np10")
     gabarito["NP10"] = np10
     vals10 = ", ".join(str(PROP_VALUES[i]) for i in range(np10))
-    v10_str = st.text_input(f"Q10 — Valor correto (props: {vals10})", placeholder="Ex: 06", key="gab_soma10")
+    v10_str = st.text_input(f"Q10 — Valor do gabarito", help=f"Proposições disponíveis: {vals10}", placeholder="Ex: 06", key="gab_soma10")
     try:
         gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
     except ValueError:
