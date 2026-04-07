@@ -417,30 +417,24 @@ st.info(
 
 col_s1, col_s2 = st.columns([1, 1])
 with col_s1:
-    st.markdown("**Q09**")
-    np9 = st.selectbox("Nº de proposições — Q09", [4, 5, 6, 7], key="np9")
+    np9 = st.selectbox("Q09 — Nº de proposições", [4, 5, 6, 7], key="np9")
     gabarito["NP9"] = np9
     vals9 = ", ".join(str(PROP_VALUES[i]) for i in range(np9))
-    st.caption(f"Valores: {vals9}")
-    v9_str = st.text_input("Valor correto do gabarito", placeholder="Ex: 13", key="gab_soma9")
+    v9_str = st.text_input(f"Q09 — Valor correto (props: {vals9})", placeholder="Ex: 13", key="gab_soma9")
     try:
         gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
     except ValueError:
         gabarito["SOMA9"] = None
-        st.caption("⚠️ Digite apenas números")
 
 with col_s2:
-    st.markdown("**Q10**")
-    np10 = st.selectbox("Nº de proposições — Q10", [4, 5, 6, 7], key="np10")
+    np10 = st.selectbox("Q10 — Nº de proposições", [4, 5, 6, 7], key="np10")
     gabarito["NP10"] = np10
     vals10 = ", ".join(str(PROP_VALUES[i]) for i in range(np10))
-    st.caption(f"Valores: {vals10}")
-    v10_str = st.text_input("Valor correto do gabarito", placeholder="Ex: 06", key="gab_soma10")
+    v10_str = st.text_input(f"Q10 — Valor correto (props: {vals10})", placeholder="Ex: 06", key="gab_soma10")
     try:
         gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
     except ValueError:
         gabarito["SOMA10"] = None
-        st.caption("⚠️ Digite apenas números")
 
 peso_soma = 1.0
 
