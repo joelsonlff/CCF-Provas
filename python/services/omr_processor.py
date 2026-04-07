@@ -108,7 +108,7 @@ SOMA_QUESTION_MAP = {0: 9, 1: 10}
 # Bolhas preenchidas a caneta azul/preta: ~70–110 (escuro).
 # Valor 125 evita falsos positivos de bordas de bolhas (~147) e
 # garante detecção de bolhas com tinta (~70–110).
-FILL_INTENSITY_THRESHOLD = 125
+FILL_INTENSITY_THRESHOLD = 135
 
 # Contraste mínimo entre a bolha mais escura e a mais clara do grupo.
 # Num gabarito em branco: contraste real das bolhas ~16–20 (ruído de borda).
@@ -117,7 +117,7 @@ FILL_INTENSITY_THRESHOLD = 125
 MIN_CONTRAST_OBJ = 40
 
 # Limiar para somatórias (igual ao das objetivas após a correção do QR code)
-FILL_THRESHOLD_SOMA = 125
+FILL_THRESHOLD_SOMA = 135
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -162,50 +162,71 @@ def _detect_sheet_corners(img_bgr: np.ndarray) -> Optional[np.ndarray]:
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
     # ── Estratégia 1: marcadores fiduciais pretos nos cantos ─────────────────
-    # Os marcadores são quadrados ~8×8mm (≈22×22px a 72dpi).
-    # Threshold agressivo para isolar apenas regiões muito escuras.
-    _, dark_mask = cv2.threshold(gray, 60, 255, cv2.THRESH_BINARY_INV)
-    contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Tenta limiares progressivamente mais flexíveis (60 → 80 → 100)
+    # para lidar com fotos mais claras ou marcadores pouco contrastados.
+    min_marker_px = int(min(h, w) * 0.012)
+    max_marker_px = int(min(h, w) * 0.07)
 
-    # Filtra contornos quadrados com tamanho plausível para um marcador
-    min_marker_px = int(min(h, w) * 0.012)   # ≈ 1.2% da dimensão menor
-    max_marker_px = int(min(h, w) * 0.07)    # ≈ 7%
-    candidates = []
-    for cnt in contours:
-        x, y, cw, ch = cv2.boundingRect(cnt)
-        if not (min_marker_px < cw < max_marker_px and min_marker_px < ch < max_marker_px):
-            continue
-        aspect = cw / ch
-        if not (0.5 < aspect < 2.0):
-            continue
-        area = cv2.contourArea(cnt)
-        if area < min_marker_px * min_marker_px * 0.3:
-            continue
-        cx, cy = x + cw // 2, y + ch // 2
-        candidates.append((cx, cy, area))
+    def _find_marker_candidates(threshold: int):
+        _, dark_mask = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY_INV)
+        contours, _ = cv2.findContours(dark_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        found = []
+        for cnt in contours:
+            x, y, cw, ch = cv2.boundingRect(cnt)
+            if not (min_marker_px < cw < max_marker_px and min_marker_px < ch < max_marker_px):
+                continue
+            if not (0.5 < cw / ch < 2.0):
+                continue
+            if cv2.contourArea(cnt) < min_marker_px * min_marker_px * 0.3:
+                continue
+            found.append((x + cw // 2, y + ch // 2, cv2.contourArea(cnt)))
+        return found
 
-    if len(candidates) >= 4:
-        # Seleciona o maior marcador de cada quadrante
+    def _pick_quadrant_markers(candidates):
         cx_mid, cy_mid = w / 2, h / 2
-        quadrants = {
+        quads = {
             'tl': [c for c in candidates if c[0] < cx_mid and c[1] < cy_mid],
             'tr': [c for c in candidates if c[0] >= cx_mid and c[1] < cy_mid],
             'br': [c for c in candidates if c[0] >= cx_mid and c[1] >= cy_mid],
             'bl': [c for c in candidates if c[0] < cx_mid and c[1] >= cy_mid],
         }
-        if all(quadrants[q] for q in ('tl', 'tr', 'br', 'bl')):
-            pick = lambda q: max(q, key=lambda c: c[2])
-            tl = pick(quadrants['tl'])
-            tr = pick(quadrants['tr'])
-            br = pick(quadrants['br'])
-            bl = pick(quadrants['bl'])
-            corners = np.float32([
-                [tl[0], tl[1]],
-                [tr[0], tr[1]],
-                [br[0], br[1]],
-                [bl[0], bl[1]],
-            ])
-            return corners
+        pick = lambda q: max(q, key=lambda c: c[2]) if q else None
+        return {k: pick(v) for k, v in quads.items()}
+
+    best_candidates = []
+    for thresh in (60, 80, 100):
+        cands = _find_marker_candidates(thresh)
+        if len(cands) > len(best_candidates):
+            best_candidates = cands
+
+    quads = _pick_quadrant_markers(best_candidates)
+    tl, tr, br, bl = quads['tl'], quads['tr'], quads['br'], quads['bl']
+
+    if tl and tr and br and bl:
+        # Estratégia 1a: todos os 4 marcadores encontrados
+        corners = np.float32([
+            [tl[0], tl[1]], [tr[0], tr[1]],
+            [br[0], br[1]], [bl[0], bl[1]],
+        ])
+        return corners
+
+    # Estratégia 1b: apenas 3 marcadores → estima o 4º pelo paralelogramo
+    # Propriedade: TL + BR = TR + BL  (diagonais se bissectam no centro)
+    present = {k: v for k, v in quads.items() if v is not None}
+    if len(present) == 3:
+        missing = [k for k in ('tl', 'tr', 'br', 'bl') if quads[k] is None][0]
+        p = {k: np.float32([v[0], v[1]]) for k, v in present.items()}
+        if missing == 'tl':   estimated = p['tr'] + p['bl'] - p['br']
+        elif missing == 'tr': estimated = p['tl'] + p['br'] - p['bl']
+        elif missing == 'br': estimated = p['tr'] + p['bl'] - p['tl']
+        else:                 estimated = p['tl'] + p['br'] - p['tr']
+        quads[missing] = (float(estimated[0]), float(estimated[1]), 0)
+        tl, tr, br, bl = quads['tl'], quads['tr'], quads['br'], quads['bl']
+        corners = np.float32([
+            [tl[0], tl[1]], [tr[0], tr[1]],
+            [br[0], br[1]], [bl[0], bl[1]],
+        ])
+        return corners
 
     # ── Estratégia 2: maior contorno retangular (folha vs fundo contrastante) ─
     scale = min(1.0, 1200 / max(h, w))
