@@ -37,15 +37,32 @@ st.markdown("""
 /* Remove padding padrão do Streamlit */
 [data-testid="stAppViewContainer"] { background: #FDF8F0; }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="block-container"] { padding-top: 0 !important; }
-.block-container { padding-top: 1rem !important; }
+[data-testid="block-container"] { padding-top: 0 !important; padding-bottom: 1rem !important; }
+.block-container { padding-top: 0.5rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+
+/* Reduz espaçamento entre elementos */
+[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
+div[data-testid="stVerticalBlockBorderWrapper"] { padding: 0 !important; }
+
+/* Reduz margem dos widgets */
+div[data-testid="stSelectbox"],
+div[data-testid="stTextInput"],
+div[data-testid="stNumberInput"],
+div[data-testid="stFileUploader"] { margin-bottom: 0.2rem !important; }
+
+/* Reduz padding dos labels */
+label { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+
+/* Reduz espaçamento do st.info e st.caption */
+[data-testid="stCaptionContainer"] { margin-top: 0 !important; margin-bottom: 0.2rem !important; }
+[data-testid="stAlert"] { padding: 8px 12px !important; margin-bottom: 0.4rem !important; }
 
 /* ── Cabeçalho ── */
 .ccf-header {
     background: linear-gradient(135deg, #5C0F12, #7B1518 60%, #9B2528);
-    border-radius: 14px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
     position: relative;
     overflow: hidden;
     display: flex;
@@ -91,8 +108,8 @@ st.markdown("""
     background: white;
     border: 1px solid #E0D5C5;
     border-radius: 12px;
-    padding: 18px 18px 8px;
-    margin-bottom: 14px;
+    padding: 12px 14px 6px;
+    margin-bottom: 8px;
     box-shadow: 0 1px 5px rgba(123,21,24,0.05);
 }
 .ccf-card-label {
@@ -101,17 +118,17 @@ st.markdown("""
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: #C4982A;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 .ccf-section-bar {
     background: #7B1518;
     color: white;
-    padding: 6px 12px;
-    border-radius: 7px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: .5px;
-    margin: 10px 0 8px;
+    margin: 6px 0 4px;
 }
 
 /* ── Botões ── */
