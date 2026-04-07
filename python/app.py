@@ -415,7 +415,7 @@ st.info(
     "Deixe em branco para não corrigir."
 )
 
-col_s1, col_s2, col_s3 = st.columns([3, 3, 2])
+col_s1, col_s2 = st.columns([1, 1])
 with col_s1:
     st.markdown("**Q09**")
     np9 = st.selectbox("Nº de proposições — Q09", [4, 5, 6, 7], key="np9")
@@ -442,13 +442,7 @@ with col_s2:
         gabarito["SOMA10"] = None
         st.caption("⚠️ Digite apenas números")
 
-with col_s3:
-    st.markdown("**Pontuação**")
-    peso_soma = st.number_input(
-        "Pontos por somatória (100%)",
-        min_value=0.0, max_value=10.0, value=1.0, step=0.5,
-        key="peso_soma"
-    )
+peso_soma = 1.0
 
 st.markdown('</div>', unsafe_allow_html=True)
 
