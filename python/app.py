@@ -150,9 +150,13 @@ div[data-testid="stRadio"] > div { gap: 4px !important; }
 /* ── Inputs ── */
 div[data-baseweb="input"] input {
     border-color: #E0D5C5 !important;
-    background: #FDF8F0 !important;
+    background: white !important;
+    color: #2C0A0B !important;
+    font-weight: 700 !important;
+    font-size: 15px !important;
 }
 div[data-baseweb="input"] input:focus { border-color: #C4982A !important; }
+div[data-baseweb="input"] input::placeholder { color: #B0A090 !important; font-weight: 400 !important; }
 
 /* ── Rodapé ── */
 .ccf-footer {
@@ -347,7 +351,7 @@ st.caption("Preencha para calcular nota automaticamente. Deixe em branco para ve
 gabarito = {}
 
 st.markdown('<div class="ccf-section-bar">Questões Objetivas — Q03 a Q08</div>', unsafe_allow_html=True)
-st.caption("Digite a letra correta em CAIXA ALTA (A, B, C, D ou E). Deixe em branco para não corrigir.")
+st.info("✏️ **Como preencher:** Digite a letra da resposta correta em **CAIXA ALTA** (A, B, C, D ou E). Deixe o campo em branco se não quiser corrigir aquela questão.")
 
 cols_obj = st.columns(6)
 for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
@@ -357,7 +361,7 @@ for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
         gabarito[f"Q{q}"] = val if val in ("A", "B", "C", "D", "E") else ""
 
 st.markdown('<div class="ccf-section-bar">Questões Somatórias — Q09 e Q10</div>', unsafe_allow_html=True)
-st.caption("Digite o valor numérico correto (0 a 99) em CAIXA ALTA. Deixe em branco para não corrigir.")
+st.info("✏️ **Como preencher:** Digite o valor numérico correto (de 0 a 99). Exemplo: se a resposta for Dez=4 e Uni=5, digite **45**. Deixe em branco se não quiser corrigir.")
 
 col_s1, col_s2, col_s3 = st.columns([2, 2, 2])
 with col_s1:
