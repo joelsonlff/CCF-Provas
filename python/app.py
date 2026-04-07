@@ -403,7 +403,7 @@ st.info("✏️ **Como preencher:** Digite a letra da resposta correta em **CAIX
 cols_obj = st.columns(6)
 for i, q in enumerate(["3", "4", "5", "6", "7", "8"]):
     with cols_obj[i]:
-        val = st.text_input(f"Q{q}", placeholder="A–E", max_chars=1, key=f"gab_q{q}")
+        val = st.text_input(f"Q{int(q):02d}", placeholder="A–E", max_chars=1, key=f"gab_q{q}")
         val = val.strip().upper()
         gabarito[f"Q{q}"] = val if val in ("A", "B", "C", "D", "E") else ""
 
