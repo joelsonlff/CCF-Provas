@@ -17,6 +17,7 @@ from datetime import datetime
 
 import google.generativeai as genai
 from PIL import Image
+import fitz  # pymupdf
 
 from services.omr_processor import process_answer_sheet
 
@@ -252,6 +253,24 @@ def ler_nome_via_gemini(image_path: str) -> str:
     return ""
 
 
+def expandir_pdf(uploaded_file) -> list:
+    """Converte cada página de um PDF em um arquivo temporário JPG.
+    Retorna lista de (nome_exibido, caminho_tmp)."""
+    pdf_bytes = uploaded_file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    paginas = []
+    for i, page in enumerate(doc):
+        mat = fitz.Matrix(2.0, 2.0)   # 2× zoom → ~150 dpi → boa qualidade para OMR
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        tmp.write(pix.tobytes("jpeg", jpg_quality=95))
+        tmp.close()
+        nome = f"{uploaded_file.name} — pág. {i + 1}"
+        paginas.append((nome, tmp.name))
+    doc.close()
+    return paginas
+
+
 def processar_arquivo(uploaded_file) -> dict:
     suffix = os.path.splitext(uploaded_file.name)[1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -415,12 +434,40 @@ st.info(
     "Deixe em branco para não corrigir."
 )
 
+def _max_soma(np: int) -> int:
+    return sum(PROP_VALUES[:np])
+
+def _valida_soma(valor_str: str, np: int, label: str):
+    """Exibe aviso se o valor digitado for inválido para o NP escolhido."""
+    if not valor_str.strip():
+        return
+    try:
+        v = int(valor_str)
+    except ValueError:
+        st.error(f"{label}: valor deve ser um número inteiro.")
+        return
+    maximo = _max_soma(np)
+    if v < 0 or v > maximo:
+        st.error(
+            f"{label}: valor **{v}** inválido para NP={np}. "
+            f"Com {np} proposições o máximo é **{maximo}** "
+            f"({' + '.join(str(PROP_VALUES[i]) for i in range(np))})."
+        )
+    else:
+        props = _decode_props(v, np)
+        if props:
+            nomes = " + ".join(str(PROP_VALUES[i]) for i in sorted(props))
+            st.caption(f"Proposições verdadeiras: {nomes}")
+        else:
+            st.caption("Nenhuma proposição verdadeira (valor 0).")
+
 col_s1, col_s2 = st.columns([1, 1])
 with col_s1:
     np9 = st.selectbox("Q09 — Nº de proposições", [4, 5, 6, 7], key="np9")
     gabarito["NP9"] = np9
     vals9 = ", ".join(str(PROP_VALUES[i]) for i in range(np9))
-    v9_str = st.text_input(f"Q09 — Valor do gabarito", help=f"Proposições disponíveis: {vals9}", placeholder="Ex: 13", key="gab_soma9")
+    v9_str = st.text_input(f"Q09 — Valor do gabarito (máx {_max_soma(np9)})", help=f"Proposições disponíveis: {vals9}", placeholder="Ex: 13", key="gab_soma9")
+    _valida_soma(v9_str, np9, "Q09")
     try:
         gabarito["SOMA9"] = int(v9_str) if v9_str.strip() else None
     except ValueError:
@@ -430,7 +477,8 @@ with col_s2:
     np10 = st.selectbox("Q10 — Nº de proposições", [4, 5, 6, 7], key="np10")
     gabarito["NP10"] = np10
     vals10 = ", ".join(str(PROP_VALUES[i]) for i in range(np10))
-    v10_str = st.text_input(f"Q10 — Valor do gabarito", help=f"Proposições disponíveis: {vals10}", placeholder="Ex: 06", key="gab_soma10")
+    v10_str = st.text_input(f"Q10 — Valor do gabarito (máx {_max_soma(np10)})", help=f"Proposições disponíveis: {vals10}", placeholder="Ex: 06", key="gab_soma10")
+    _valida_soma(v10_str, np10, "Q10")
     try:
         gabarito["SOMA10"] = int(v10_str) if v10_str.strip() else None
     except ValueError:
@@ -443,12 +491,17 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ── PASSO 2: Upload ───────────────────────────────────────────────────────────
 st.markdown('<div class="ccf-card"><div class="ccf-card-label">Passo 2 — Fotos dos gabaritos</div>', unsafe_allow_html=True)
 uploaded = st.file_uploader(
-    "Arraste as fotos aqui ou clique para selecionar (JPG, PNG, WEBP)",
-    type=["jpg", "jpeg", "png", "webp"],
+    "Arraste as fotos ou PDFs aqui (JPG, PNG, WEBP, PDF)",
+    type=["jpg", "jpeg", "png", "webp", "pdf"],
     accept_multiple_files=True,
 )
 if uploaded:
-    st.caption(f"{len(uploaded)} foto(s) selecionada(s)")
+    n_pdf  = sum(1 for f in uploaded if f.name.lower().endswith(".pdf"))
+    n_img  = len(uploaded) - n_pdf
+    partes = []
+    if n_img:  partes.append(f"{n_img} imagem(ns)")
+    if n_pdf:  partes.append(f"{n_pdf} PDF(s)")
+    st.caption(f"{' e '.join(partes)} selecionado(s) — cada página de PDF será processada individualmente")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Botão processar ───────────────────────────────────────────────────────────
@@ -458,13 +511,53 @@ if uploaded:
         progresso  = st.progress(0, text="Iniciando...")
         status     = st.empty()
 
-        for i, arq in enumerate(uploaded):
-            status.text(f"Lendo {arq.name} ({i+1}/{len(uploaded)})...")
-            arq.seek(0)
-            r = processar_arquivo(arq)
+        # Expande PDFs em páginas individuais
+        fila = []   # lista de (nome_exibido, path_tmp | UploadedFile)
+        tmps_pdf = []
+        for arq in uploaded:
+            if arq.name.lower().endswith(".pdf"):
+                arq.seek(0)
+                paginas = expandir_pdf(arq)
+                fila.extend(paginas)
+                tmps_pdf.extend(p for _, p in paginas)
+            else:
+                fila.append((arq.name, arq))
+
+        total = len(fila)
+        for i, (nome_exib, origem) in enumerate(fila):
+            status.text(f"Lendo {nome_exib} ({i+1}/{total})...")
+            if isinstance(origem, str):
+                # página de PDF: já é um path temporário
+                try:
+                    resultado = process_answer_sheet(origem)
+                    if "erro" in resultado:
+                        r = {"arquivo": nome_exib, "erro": resultado["erro"],
+                             "nome": "", "obj": {}, "soma": {}}
+                    else:
+                        obj_raw  = resultado.get("objetivas", {})
+                        soma_raw = resultado.get("somatorias", {})
+                        nome_al  = ler_nome_via_gemini(origem)
+                        r = {
+                            "arquivo": nome_exib,
+                            "nome":    nome_al,
+                            "obj":     {str(k): v for k, v in obj_raw.items()  if v is not None},
+                            "soma":    {str(k): v for k, v in soma_raw.items() if v is not None},
+                            "erro":    "",
+                        }
+                except Exception as e:
+                    r = {"arquivo": nome_exib, "erro": str(e),
+                         "nome": "", "obj": {}, "soma": {}}
+            else:
+                origem.seek(0)
+                r = processar_arquivo(origem)
+                r["arquivo"] = nome_exib
             resultados.append(r)
-            progresso.progress((i + 1) / len(uploaded),
-                               text=f"{i+1} de {len(uploaded)} processados")
+            progresso.progress((i + 1) / total,
+                               text=f"{i+1} de {total} processados")
+
+        for p in tmps_pdf:
+            try: os.unlink(p)
+            except: pass
 
         progresso.empty()
         status.empty()
@@ -493,10 +586,15 @@ if uploaded:
                 val = r["soma"].get(q, "")
                 if tem_gabarito and not r["erro"] and gabarito.get(f"SOMA{q}") is not None and val != "":
                     np_q  = gabarito.get(f"NP{q}", 4)
-                    score = _score_ufsc(np_q, int(gabarito[f"SOMA{q}"]), int(val))
-                    pct   = int(score * 100)
-                    icon  = "✅" if pct == 100 else ("⚠️" if pct > 0 else "❌")
-                    row[f"Soma {q}"] = f"{icon} {val} ({pct}%)"
+                    maximo_q = _max_soma(np_q)
+                    val_int = int(val)
+                    if val_int > maximo_q:
+                        row[f"Soma {q}"] = f"⚠️ {val} (inválido — máx {maximo_q} para NP={np_q})"
+                    else:
+                        score = _score_ufsc(np_q, int(gabarito[f"SOMA{q}"]), val_int)
+                        pct   = int(score * 100)
+                        icon  = "✅" if pct == 100 else ("⚠️" if pct > 0 else "❌")
+                        row[f"Soma {q}"] = f"{icon} {val} ({pct}%)"
                 else:
                     row[f"Soma {q}"] = str(val) if val != "" else "—"
 
